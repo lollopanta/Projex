@@ -1,0 +1,287 @@
+@import "tailwindcss";
+
+/* ============================================
+   PROJEX DESIGN SYSTEM - Tailwind v4
+   ============================================ */
+
+@theme {
+  /* Primary Colors (Indigo - Projects) */
+  --color-primary-50: oklch(0.97 0.02 270);
+  --color-primary-100: oklch(0.94 0.04 270);
+  --color-primary-200: oklch(0.88 0.08 270);
+  --color-primary-300: oklch(0.79 0.12 270);
+  --color-primary-400: oklch(0.68 0.16 270);
+  --color-primary-500: oklch(0.55 0.21 270);
+  --color-primary-600: oklch(0.48 0.22 270);
+  --color-primary-700: oklch(0.42 0.20 270);
+  --color-primary-800: oklch(0.36 0.17 270);
+  --color-primary-900: oklch(0.31 0.14 270);
+  --color-primary-950: oklch(0.22 0.10 270);
+
+  /* Secondary Colors (Purple - Lists) */
+  --color-secondary-50: oklch(0.98 0.01 300);
+  --color-secondary-100: oklch(0.96 0.03 300);
+  --color-secondary-200: oklch(0.92 0.06 300);
+  --color-secondary-300: oklch(0.85 0.12 300);
+  --color-secondary-400: oklch(0.74 0.18 300);
+  --color-secondary-500: oklch(0.58 0.22 300);
+  --color-secondary-600: oklch(0.52 0.24 300);
+  --color-secondary-700: oklch(0.45 0.22 300);
+  --color-secondary-800: oklch(0.39 0.18 300);
+  --color-secondary-900: oklch(0.32 0.15 300);
+  --color-secondary-950: oklch(0.23 0.10 300);
+
+  /* Accent Colors (Blue - Labels) */
+  --color-accent-50: oklch(0.97 0.01 240);
+  --color-accent-100: oklch(0.93 0.03 240);
+  --color-accent-200: oklch(0.88 0.06 240);
+  --color-accent-300: oklch(0.79 0.11 240);
+  --color-accent-400: oklch(0.68 0.16 240);
+  --color-accent-500: oklch(0.55 0.20 240);
+  --color-accent-600: oklch(0.48 0.21 240);
+  --color-accent-700: oklch(0.42 0.19 240);
+  --color-accent-800: oklch(0.36 0.16 240);
+  --color-accent-900: oklch(0.32 0.13 240);
+  --color-accent-950: oklch(0.23 0.09 240);
+
+  /* Semantic Colors */
+  --color-success-50: oklch(0.97 0.02 150);
+  --color-success-500: oklch(0.62 0.19 150);
+  --color-success-600: oklch(0.55 0.17 150);
+  --color-success-700: oklch(0.48 0.15 150);
+  
+  --color-warning-50: oklch(0.98 0.02 85);
+  --color-warning-500: oklch(0.75 0.18 70);
+  --color-warning-600: oklch(0.68 0.17 65);
+  --color-warning-700: oklch(0.60 0.16 60);
+  
+  --color-danger-50: oklch(0.97 0.01 25);
+  --color-danger-500: oklch(0.58 0.22 25);
+  --color-danger-600: oklch(0.52 0.21 25);
+  --color-danger-700: oklch(0.45 0.19 25);
+
+  /* Radius */
+  --radius-sm: 0.375rem;
+  --radius-md: 0.5rem;
+  --radius-lg: 0.75rem;
+  --radius-xl: 1rem;
+  --radius-2xl: 1.5rem;
+  --radius-full: 9999px;
+}
+
+/* ============================================
+   CSS Custom Properties for shadcn/ui
+   ============================================ */
+
+:root {
+  --background: 0 0% 100%;
+  --foreground: 222.2 84% 4.9%;
+  --card: 0 0% 100%;
+  --card-foreground: 222.2 84% 4.9%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 222.2 84% 4.9%;
+  --primary: 239 84% 67%;
+  --primary-foreground: 210 40% 98%;
+  --secondary: 270 91% 65%;
+  --secondary-foreground: 222.2 47.4% 11.2%;
+  --muted: 210 40% 96.1%;
+  --muted-foreground: 215.4 16.3% 46.9%;
+  --accent: 217 91% 60%;
+  --accent-foreground: 222.2 47.4% 11.2%;
+  --destructive: 0 84.2% 60.2%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 214.3 31.8% 91.4%;
+  --input: 214.3 31.8% 91.4%;
+  --ring: 239 84% 67%;
+  --radius: 0.75rem;
+}
+
+.dark {
+  --background: 222.2 84% 4.9%;
+  --foreground: 210 40% 98%;
+  --card: 222.2 84% 4.9%;
+  --card-foreground: 210 40% 98%;
+  --popover: 222.2 84% 4.9%;
+  --popover-foreground: 210 40% 98%;
+  --primary: 239 84% 67%;
+  --primary-foreground: 222.2 47.4% 11.2%;
+  --secondary: 270 91% 65%;
+  --secondary-foreground: 210 40% 98%;
+  --muted: 217.2 32.6% 17.5%;
+  --muted-foreground: 215 20.2% 65.1%;
+  --accent: 217 91% 60%;
+  --accent-foreground: 210 40% 98%;
+  --destructive: 0 62.8% 30.6%;
+  --destructive-foreground: 210 40% 98%;
+  --border: 217.2 32.6% 17.5%;
+  --input: 217.2 32.6% 17.5%;
+  --ring: 239 84% 67%;
+}
+
+/* ============================================
+   Base Styles
+   ============================================ */
+
+* {
+  border-color: hsl(var(--border));
+}
+
+body {
+  background-color: hsl(var(--background));
+  color: hsl(var(--foreground));
+  font-family: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.2);
+  border-radius: 9999px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.3);
+}
+
+/* Focus visible styles */
+:focus-visible {
+  outline: none;
+  ring: 2px solid hsl(var(--ring));
+  ring-offset: 2px;
+}
+
+/* ============================================
+   Utility Classes
+   ============================================ */
+
+/* Background color utilities */
+.bg-background { background-color: hsl(var(--background)); }
+.bg-foreground { background-color: hsl(var(--foreground)); }
+.bg-card { background-color: hsl(var(--card)); }
+.bg-popover { background-color: hsl(var(--popover)); }
+.bg-primary { background-color: hsl(var(--primary)); }
+.bg-secondary { background-color: hsl(var(--secondary)); }
+.bg-muted { background-color: hsl(var(--muted)); }
+.bg-accent { background-color: hsl(var(--accent)); }
+.bg-destructive { background-color: hsl(var(--destructive)); }
+
+/* Text color utilities */
+.text-foreground { color: hsl(var(--foreground)); }
+.text-card-foreground { color: hsl(var(--card-foreground)); }
+.text-popover-foreground { color: hsl(var(--popover-foreground)); }
+.text-primary { color: hsl(var(--primary)); }
+.text-primary-foreground { color: hsl(var(--primary-foreground)); }
+.text-secondary { color: hsl(var(--secondary)); }
+.text-secondary-foreground { color: hsl(var(--secondary-foreground)); }
+.text-muted-foreground { color: hsl(var(--muted-foreground)); }
+.text-accent-foreground { color: hsl(var(--accent-foreground)); }
+.text-destructive { color: hsl(var(--destructive)); }
+.text-destructive-foreground { color: hsl(var(--destructive-foreground)); }
+
+/* Border utilities */
+.border-border { border-color: hsl(var(--border)); }
+.border-input { border-color: hsl(var(--input)); }
+.border-primary { border-color: hsl(var(--primary)); }
+.border-destructive { border-color: hsl(var(--destructive)); }
+
+/* Ring utilities */
+.ring-ring { --tw-ring-color: hsl(var(--ring)); }
+.ring-destructive { --tw-ring-color: hsl(var(--destructive)); }
+.ring-offset-background { --tw-ring-offset-color: hsl(var(--background)); }
+
+/* Shadow */
+.shadow-sm { box-shadow: 0 1px 2px 0 rgb(0 0 0 / 0.05); }
+.shadow-md { box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1); }
+.shadow-lg { box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1); }
+
+/* ============================================
+   Custom Component Classes
+   ============================================ */
+
+/* Skeleton animation */
+.skeleton {
+  animation: pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  background-color: hsl(var(--muted));
+  border-radius: 0.375rem;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* Card hover effect */
+.card-hover {
+  transition: all 0.2s;
+}
+.card-hover:hover {
+  box-shadow: 0 10px 15px -3px rgb(0 0 0 / 0.1), 0 4px 6px -4px rgb(0 0 0 / 0.1);
+  transform: translateY(-2px);
+}
+
+/* Gradient text */
+.gradient-text {
+  background: linear-gradient(to right, hsl(var(--primary)), hsl(var(--secondary)));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* ============================================
+   Animations
+   ============================================ */
+
+@keyframes slide-up-fade {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-down-fade {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+.animate-slide-up-fade {
+  animation: slide-up-fade 0.2s ease-out;
+}
+
+.animate-slide-down-fade {
+  animation: slide-down-fade 0.2s ease-out;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.15s ease-out;
+}
