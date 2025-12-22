@@ -6,7 +6,7 @@
  */
 
 import React from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -45,6 +45,7 @@ const registerSchema = z
 type RegisterFormData = z.infer<typeof registerSchema>;
 
 export const RegisterPage: React.FC = () => {
+  const navigate = useNavigate();
   const registerMutation = useRegister();
 
   const {
@@ -57,7 +58,17 @@ export const RegisterPage: React.FC = () => {
 
   const onSubmit = (data: RegisterFormData) => {
     const { confirmPassword, ...registerData } = data;
-    registerMutation.mutate(registerData);
+    registerMutation.mutate(registerData, {
+      onSuccess: (response) => {
+        // Check if email verification is required
+        if (response?.requiresEmailVerification) {
+          navigate(`/verify-email?email=${encodeURIComponent(response.user.email || data.email)}`);
+        } else {
+          // Auto-login successful, navigate to dashboard
+          navigate("/");
+        }
+      },
+    });
   };
 
   return (

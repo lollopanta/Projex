@@ -5,7 +5,8 @@ const Task = require('../models/Task');
 // Check if user has access to a project
 const checkProjectAccess = async (req, res, next) => {
   try {
-    const projectId = req.params.projectId || req.body.project;
+    // Check for project ID in various places (routes use different param names)
+    const projectId = req.params.projectId || req.params.id || req.body.project;
     if (!projectId) return next();
 
     const project = await Project.findById(projectId);
@@ -39,7 +40,8 @@ const checkProjectAccess = async (req, res, next) => {
 // Check if user has access to a list
 const checkListAccess = async (req, res, next) => {
   try {
-    const listId = req.params.listId || req.body.list;
+    // Check for list ID in various places (routes use different param names)
+    const listId = req.params.listId || req.params.id || req.body.list;
     if (!listId) return next();
 
     const list = await List.findById(listId);

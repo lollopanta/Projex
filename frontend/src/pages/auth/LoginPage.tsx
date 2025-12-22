@@ -6,7 +6,7 @@
  */
 
 import React, { useState } from "react";
-import { Link } from "react-router";
+import { Link, useNavigate } from "react-router";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -34,9 +34,13 @@ type LoginFormData = z.infer<typeof loginSchema>;
 type TwoFactorFormData = z.infer<typeof twoFactorSchema>;
 
 export const LoginPage: React.FC = () => {
+  const navigate = useNavigate();
   const { requires2FA, setRequires2FA } = useAuthStore();
   const loginMutation = useLogin();
   const [loginData, setLoginData] = useState<LoginFormData | null>(null);
+  const [twoFactorMethod, setTwoFactorMethod] = useState<"totp" | "email">("totp");
+  const [emailVerificationRequired, setEmailVerificationRequired] = useState(false);
+  const [verificationEmail, setVerificationEmail] = useState("");
 
   const {
     register: registerLogin,
@@ -56,7 +60,17 @@ export const LoginPage: React.FC = () => {
 
   const onLoginSubmit = (data: LoginFormData) => {
     setLoginData(data);
-    loginMutation.mutate(data);
+    loginMutation.mutate(data, {
+      onError: (error: unknown) => {
+        const err = error as { requiresEmailVerification?: boolean; email?: string; requires2FA?: boolean; twoFactorMethod?: string };
+        if (err.requiresEmailVerification) {
+          setEmailVerificationRequired(true);
+          setVerificationEmail(err.email || data.email);
+        } else if (err.requires2FA) {
+          setTwoFactorMethod((err.twoFactorMethod as "totp" | "email") || "totp");
+        }
+      },
+    });
   };
 
   const on2FASubmit = (data: TwoFactorFormData) => {
@@ -73,6 +87,52 @@ export const LoginPage: React.FC = () => {
     setLoginData(null);
   };
 
+  // Email Verification Required
+  if (emailVerificationRequired) {
+    return (
+      <motion.div
+        initial={{ opacity: 0, x: 20 }}
+        animate={{ opacity: 1, x: 0 }}
+        transition={{ duration: 0.3 }}
+      >
+        <Card>
+          <CardHeader className="text-center">
+            <div className="mx-auto w-12 h-12 rounded-full bg-yellow-100 dark:bg-yellow-900/20 flex items-center justify-center mb-4">
+              <FontAwesomeIcon icon={faEnvelope} className="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
+            </div>
+            <CardTitle>Email Verification Required</CardTitle>
+            <CardDescription>
+              Please verify your email address before logging in
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground text-center">
+              A verification link has been sent to <strong>{verificationEmail}</strong>
+            </p>
+            <Button
+              variant="outline"
+              className="w-full"
+              onClick={() => navigate(`/verify-email?email=${encodeURIComponent(verificationEmail)}`)}
+            >
+              Go to Verification Page
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full"
+              onClick={() => {
+                setEmailVerificationRequired(false);
+                setVerificationEmail("");
+              }}
+            >
+              Back to login
+            </Button>
+          </CardContent>
+        </Card>
+      </motion.div>
+    );
+  }
+
   // 2FA Form
   if (requires2FA) {
     return (
@@ -88,7 +148,9 @@ export const LoginPage: React.FC = () => {
             </div>
             <CardTitle>Two-Factor Authentication</CardTitle>
             <CardDescription>
-              Enter the 6-digit code from your authenticator app
+              {twoFactorMethod === "email"
+                ? "Enter the 6-digit code sent to your email"
+                : "Enter the 6-digit code from your authenticator app"}
             </CardDescription>
           </CardHeader>
           <CardContent>

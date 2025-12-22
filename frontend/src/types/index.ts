@@ -38,6 +38,9 @@ export interface User extends Timestamps {
   avatar?: string;
   role: UserRole;
   twoFactorEnabled: boolean;
+  twoFactorMethod?: "totp" | "email";
+  emailVerified: boolean;
+  emailVerifiedAt?: string | null;
   theme: Theme;
   preferences: UserPreferences;
   googleCalendarAccessToken?: string;
@@ -361,6 +364,7 @@ export interface ImportBackupRequest {
 export interface AuthResponse {
   message: string;
   token: string;
+  requiresEmailVerification?: boolean;
   user: {
     id: ObjectId;
     username: string;
@@ -368,7 +372,10 @@ export interface AuthResponse {
     firstName?: string;
     lastName?: string;
     theme: Theme;
+    role?: UserRole;
     twoFactorEnabled?: boolean;
+    twoFactorMethod?: "totp" | "email";
+    emailVerified?: boolean;
   };
 }
 
@@ -450,4 +457,50 @@ export interface ToastMessage {
   title: string;
   description?: string;
   duration?: number;
+}
+
+// ============================================
+// Site Settings Types
+// ============================================
+
+export interface SiteSettings {
+  _id: ObjectId;
+  allowEmailSending: boolean;
+  requireEmailVerification: boolean;
+  allowEmail2FA: boolean;
+  allowTOTP2FA: boolean;
+  defaultTheme: Theme;
+  registrationEnabled: boolean;
+  maxProjectsPerUser: number | null;
+  maxTasksPerProject: number | null;
+  maintenanceMode: boolean;
+  maintenanceMessage: string;
+  emailVerificationCooldown: number;
+  email2FACooldown: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AdminStats {
+  users: {
+    total: number;
+    verified: number;
+    admins: number;
+    with2FA: number;
+  };
+}
+
+export interface UpdateSiteSettingsRequest {
+  allowEmailSending?: boolean;
+  requireEmailVerification?: boolean;
+  allowEmail2FA?: boolean;
+  allowTOTP2FA?: boolean;
+  defaultTheme?: Theme;
+  registrationEnabled?: boolean;
+  maxProjectsPerUser?: number | null;
+  maxTasksPerProject?: number | null;
+  maintenanceMode?: boolean;
+  maintenanceMessage?: string;
+  emailVerificationCooldown?: number;
+  email2FACooldown?: number;
 }

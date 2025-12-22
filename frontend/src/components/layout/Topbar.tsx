@@ -20,7 +20,7 @@ import {
   faRightFromBracket,
 } from "@fortawesome/free-solid-svg-icons";
 import { useAuthStore, useUIStore } from "@/store";
-import { useLogout } from "@/hooks";
+import { useLogout, useUpdateProfile } from "@/hooks";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { UserAvatar } from "@/components/ui/avatar";
@@ -38,11 +38,15 @@ export const Topbar: React.FC = () => {
   const { user, setTheme } = useAuthStore();
   const { toggleSidebar, openModal, setCommandPaletteOpen } = useUIStore();
   const logout = useLogout();
+  const updateProfile = useUpdateProfile();
 
   const isDarkMode = user?.theme === "dark";
 
   const handleToggleTheme = () => {
-    setTheme(isDarkMode ? "light" : "dark");
+    const newTheme = isDarkMode ? "light" : "dark";
+    setTheme(newTheme);
+    // Save to backend
+    updateProfile.mutate({ theme: newTheme });
   };
 
   const handleLogout = () => {
@@ -50,18 +54,24 @@ export const Topbar: React.FC = () => {
     navigate("/login");
   };
 
-  // Keyboard shortcut for search
+  // Keyboard shortcuts
   React.useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd/Ctrl + K for search
       if ((e.metaKey || e.ctrlKey) && e.key === "k") {
         e.preventDefault();
         setCommandPaletteOpen(true);
+      }
+      // Cmd/Ctrl + N for new task
+      if ((e.metaKey || e.ctrlKey) && e.key === "n") {
+        e.preventDefault();
+        openModal("task");
       }
     };
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [setCommandPaletteOpen]);
+  }, [setCommandPaletteOpen, openModal]);
 
   return (
     <header className="sticky top-0 z-30 h-16 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -99,6 +109,7 @@ export const Topbar: React.FC = () => {
           <Button
             onClick={() => openModal("task")}
             className="hidden sm:flex gap-2"
+            title="New Task (Ctrl+N)"
           >
             <FontAwesomeIcon icon={faPlus} className="h-4 w-4" />
             <span>New Task</span>
@@ -108,6 +119,7 @@ export const Topbar: React.FC = () => {
             size="icon"
             onClick={() => openModal("task")}
             className="sm:hidden"
+            title="New Task (Ctrl+N)"
           >
             <FontAwesomeIcon icon={faPlus} className="h-5 w-5" />
           </Button>

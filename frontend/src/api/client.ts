@@ -69,9 +69,11 @@ apiClient.interceptors.response.use(
     const standardError = new Error(message) as Error & {
       status?: number;
       errors?: ErrorResponse["errors"];
+      response?: { data?: ErrorResponse };
     };
     standardError.status = error.response?.status;
     standardError.errors = error.response?.data?.errors;
+    standardError.response = error.response ? { data: error.response.data } : undefined;
 
     return Promise.reject(standardError);
   }

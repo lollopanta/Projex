@@ -14,5 +14,6 @@ export * as labelsApi from "./labels";
 export * as commentsApi from "./comments";
 export * as backupApi from "./backup";
 export * as googleCalendarApi from "./googleCalendar";
+export * as adminApi from "./admin";
 
 export { default as apiClient, getToken, setToken, removeToken } from "./client";

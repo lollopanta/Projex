@@ -61,3 +61,19 @@ export const disable2FA = async (password: string): ApiResponse<MessageResponse>
   const response = await apiClient.post<MessageResponse>("/auth/disable-2fa", { password });
   return response.data;
 };
+
+/**
+ * Resend email verification
+ */
+export const resendVerification = async (email: string): ApiResponse<MessageResponse> => {
+  const response = await apiClient.post<MessageResponse>("/auth/resend-verification", { email });
+  return response.data;
+};
+
+/**
+ * Enable email-based 2FA
+ */
+export const enableEmail2FA = async (): ApiResponse<MessageResponse> => {
+  const response = await apiClient.post<MessageResponse>("/auth/enable-email-2fa");
+  return response.data;
+};

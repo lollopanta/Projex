@@ -47,6 +47,19 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: null
   },
+  twoFactorMethod: {
+    type: String,
+    enum: ['totp', 'email'],
+    default: null
+  },
+  emailVerified: {
+    type: Boolean,
+    default: false
+  },
+  emailVerifiedAt: {
+    type: Date,
+    default: null
+  },
   theme: {
     type: String,
     enum: ['light', 'dark'],

@@ -20,6 +20,7 @@ import {
   faInbox,
   faCalendarDay,
   faCalendarWeek,
+  faFolderPlus,
 } from "@fortawesome/free-solid-svg-icons";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/store";
@@ -184,6 +185,19 @@ export const Sidebar: React.FC = () => {
           title="Projects"
           onAdd={() => openModal("project")}
         >
+          {!sidebarCollapsed && (
+            <div className="px-3 mb-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start gap-2"
+                onClick={() => openModal("project")}
+              >
+                <FontAwesomeIcon icon={faFolderPlus} className="w-4 h-4" />
+                New Project
+              </Button>
+            </div>
+          )}
           {projectsLoading ? (
             <div className="space-y-2 px-3">
               <Skeleton className="h-8 w-full" />
@@ -214,6 +228,19 @@ export const Sidebar: React.FC = () => {
           title="Lists"
           onAdd={() => openModal("list")}
         >
+          {!sidebarCollapsed && (
+            <div className="px-3 mb-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full justify-start gap-2"
+                onClick={() => openModal("list")}
+              >
+                <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
+                New List
+              </Button>
+            </div>
+          )}
           {listsLoading ? (
             <div className="space-y-2 px-3">
               <Skeleton className="h-8 w-full" />

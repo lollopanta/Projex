@@ -16,13 +16,22 @@ import { ProtectedRoute } from "@/components/common";
 
 // Auth Pages
 import { LoginPage, RegisterPage } from "@/pages/auth";
+import { VerifyEmailPage } from "@/pages/auth/VerifyEmailPage";
 
 // App Pages
 import { DashboardPage } from "@/pages/dashboard";
 import { SettingsPage } from "@/pages/settings";
+import { InboxPage, TodayPage, UpcomingPage } from "@/pages/tasks";
+import { ProjectsPage, ProjectDetailPage } from "@/pages/projects";
+import { ListDetailPage } from "@/pages/lists";
+import { LabelsPage } from "@/pages/labels";
+import { BackupPage } from "@/pages/backup";
+import { ProfilePage } from "@/pages/profile";
 
 // Store
 import { useAuthStore } from "@/store";
+// Hooks
+import { useCurrentUser } from "@/hooks";
 
 // Query Client configuration
 const queryClient = new QueryClient({
@@ -40,38 +49,24 @@ const queryClient = new QueryClient({
 
 // Theme initialization component
 const ThemeInitializer: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { user } = useAuthStore();
+  const { user, token } = useAuthStore();
+  const { data: currentUser } = useCurrentUser();
 
   useEffect(() => {
-    // Initialize theme based on user preference or system preference
-    const theme = user?.theme || "light";
+    // Initialize theme based on user preference from backend
+    // Priority: currentUser (fresh from API) > user (from store) > default
+    const theme = currentUser?.theme || user?.theme || "light";
     if (theme === "dark") {
       document.documentElement.classList.add("dark");
     } else {
       document.documentElement.classList.remove("dark");
     }
-  }, [user?.theme]);
+  }, [user?.theme, currentUser?.theme, token]);
 
   return <>{children}</>;
 };
 
-// Placeholder pages for routes that need implementation
-const PlaceholderPage: React.FC<{ title: string }> = ({ title }) => (
-  <div className="flex flex-col items-center justify-center py-20">
-    <h1 className="text-2xl font-bold mb-2">{title}</h1>
-    <p className="text-muted-foreground">This page is coming soon</p>
-  </div>
-);
-
-const InboxPage = () => <PlaceholderPage title="Inbox" />;
-const TodayPage = () => <PlaceholderPage title="Today's Tasks" />;
-const UpcomingPage = () => <PlaceholderPage title="Upcoming Tasks" />;
-const ProjectsPage = () => <PlaceholderPage title="All Projects" />;
-const ProjectDetailPage = () => <PlaceholderPage title="Project Detail" />;
-const ListDetailPage = () => <PlaceholderPage title="List Detail" />;
-const LabelsPage = () => <PlaceholderPage title="Labels" />;
-const BackupPage = () => <PlaceholderPage title="Backup & Restore" />;
-const ProfilePage = () => <PlaceholderPage title="Profile" />;
+// All pages are now imported from their respective modules
 
 function App() {
   return (
@@ -83,6 +78,7 @@ function App() {
             <Route element={<AuthLayout />}>
               <Route path="/login" element={<LoginPage />} />
               <Route path="/register" element={<RegisterPage />} />
+              <Route path="/verify-email" element={<VerifyEmailPage />} />
             </Route>
 
             {/* Protected App Routes */}

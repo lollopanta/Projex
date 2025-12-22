@@ -57,8 +57,10 @@ export const useLogin = () => {
         {
           ...response.user,
           _id: response.user.id,
-          role: "user",
+          role: response.user.role || "user",
           twoFactorEnabled: response.user.twoFactorEnabled ?? false,
+          twoFactorMethod: response.user.twoFactorMethod,
+          emailVerified: response.user.emailVerified ?? true,
           preferences: {
             emailNotifications: true,
             pushNotifications: true,
@@ -72,9 +74,21 @@ export const useLogin = () => {
       queryClient.invalidateQueries({ queryKey: authKeys.me() });
       toast.success("Welcome back!", `Logged in as ${response.user.username}`);
     },
-    onError: (error: Error & { status?: number }) => {
-      if (error.message === "Two-factor authentication required") {
+    onError: (error: Error & { status?: number; response?: { data?: { requiresEmailVerification?: boolean; email?: string; requires2FA?: boolean; twoFactorMethod?: string } } }) => {
+      if (error.response?.data?.requiresEmailVerification) {
+        setRequires2FA(false);
+        toast.error(
+          "Email verification required",
+          "Please verify your email before logging in"
+        );
+        // Return special flag for component handling
+        return { requiresEmailVerification: true, email: error.response.data.email };
+      } else if (error.response?.data?.requires2FA) {
         setRequires2FA(true);
+        // Return 2FA method for component handling
+        return { requires2FA: true, twoFactorMethod: error.response.data.twoFactorMethod };
+      } else if (error.status === 503 && error.message.includes("maintenance")) {
+        toast.error("Maintenance mode", error.message);
       } else {
         toast.error("Login failed", error.message);
       }
@@ -93,27 +107,43 @@ export const useRegister = () => {
   return useMutation({
     mutationFn: (data: RegisterRequest) => authApi.register(data),
     onSuccess: (response) => {
-      login(
-        {
-          ...response.user,
-          _id: response.user.id,
-          role: "user",
-          twoFactorEnabled: false,
-          preferences: {
-            emailNotifications: true,
-            pushNotifications: true,
-            defaultReminderTime: 24,
+      // Check if email verification is required
+      if (response.requiresEmailVerification) {
+        // Don't log in, just show success message
+        // Navigation will be handled by the component
+        toast.success(
+          "Registration successful",
+          "Please check your email to verify your account"
+        );
+      } else {
+        // Normal login flow - auto-login user
+        login(
+          {
+            ...response.user,
+            _id: response.user.id,
+            role: response.user.role || "user",
+            twoFactorEnabled: false,
+            emailVerified: response.user.emailVerified || false,
+            preferences: {
+              emailNotifications: true,
+              pushNotifications: true,
+              defaultReminderTime: 24,
+            },
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
           },
-          createdAt: new Date().toISOString(),
-          updatedAt: new Date().toISOString(),
-        },
-        response.token
-      );
-      queryClient.invalidateQueries({ queryKey: authKeys.me() });
-      toast.success("Welcome to Projex!", "Your account has been created");
+          response.token
+        );
+        queryClient.invalidateQueries({ queryKey: authKeys.me() });
+        toast.success("Welcome to Projex!", "Your account has been created");
+      }
     },
-    onError: (error: Error) => {
-      toast.error("Registration failed", error.message);
+    onError: (error: Error & { response?: { status: number } }) => {
+      if (error.response?.status === 403 && error.message.includes("disabled")) {
+        toast.error("Registration disabled", "New registrations are currently disabled");
+      } else {
+        toast.error("Registration failed", error.message);
+      }
     },
   });
 };

@@ -42,9 +42,14 @@ import {
   useEnable2FA,
   useVerify2FA,
   useDisable2FA,
+  useSiteSettings,
+  useUpdateSiteSettings,
+  useAdminStats,
 } from "@/hooks";
+import { authApi } from "@/api";
 import { googleCalendarApi } from "@/api";
 import { cn } from "@/lib/utils";
+import { AdminSettingsPanel } from "./AdminSettingsPanel";
 
 // Validation schemas
 const profileSchema = z.object({
@@ -55,13 +60,16 @@ const profileSchema = z.object({
 type ProfileFormData = z.infer<typeof profileSchema>;
 
 // Tab types
-type SettingsTab = "profile" | "appearance" | "security" | "integrations";
+type SettingsTab = "profile" | "appearance" | "security" | "integrations" | "admin";
+
+import { faShield } from "@fortawesome/free-solid-svg-icons";
 
 const tabs: { id: SettingsTab; label: string; icon: typeof faUser }[] = [
   { id: "profile", label: "Profile", icon: faUser },
   { id: "appearance", label: "Appearance", icon: faPalette },
   { id: "security", label: "Security", icon: faShieldHalved },
   { id: "integrations", label: "Integrations", icon: faPlug },
+  { id: "admin", label: "Admin", icon: faShield },
 ];
 
 export const SettingsPage: React.FC = () => {
@@ -76,6 +84,7 @@ export const SettingsPage: React.FC = () => {
   const [verifyToken, setVerifyToken] = useState("");
   const [disablePassword, setDisablePassword] = useState("");
   const [showDisable2FADialog, setShowDisable2FADialog] = useState(false);
+  const { data: siteSettings } = useSiteSettings();
 
   // Mutations
   const updateProfileMutation = useUpdateProfile();
@@ -159,21 +168,23 @@ export const SettingsPage: React.FC = () => {
         {/* Sidebar */}
         <nav className="lg:w-48 shrink-0">
           <div className="flex lg:flex-col gap-1 overflow-x-auto pb-2 lg:pb-0">
-            {tabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={cn(
-                  "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors",
-                  activeTab === tab.id
-                    ? "bg-primary text-primary-foreground"
-                    : "text-muted-foreground hover:bg-muted"
-                )}
-              >
-                <FontAwesomeIcon icon={tab.icon} className="w-4 h-4" />
-                {tab.label}
-              </button>
-            ))}
+            {tabs
+              .filter((tab) => tab.id !== "admin" || user?.role === "admin")
+              .map((tab) => (
+                <button
+                  key={tab.id}
+                  onClick={() => setActiveTab(tab.id)}
+                  className={cn(
+                    "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors",
+                    activeTab === tab.id
+                      ? "bg-primary text-primary-foreground"
+                      : "text-muted-foreground hover:bg-muted"
+                  )}
+                >
+                  <FontAwesomeIcon icon={tab.icon} className="w-4 h-4" />
+                  {tab.label}
+                </button>
+              ))}
           </div>
         </nav>
 
@@ -248,9 +259,15 @@ export const SettingsPage: React.FC = () => {
                       <Label className="mb-3 block">Theme</Label>
                       <div className="grid grid-cols-2 gap-4">
                         <button
-                          onClick={() => setTheme("light")}
+                          onClick={() => {
+                            setTheme("light");
+                            // Save to backend
+                            updateProfileMutation.mutate({ theme: "light" });
+                          }}
+                          disabled={updateProfileMutation.isPending}
                           className={cn(
-                            "flex items-center gap-3 p-4 rounded-lg border-2 transition-colors",
+                            "flex items-center gap-3 p-4 rounded-lg border-2 transition-all",
+                            "disabled:opacity-50 disabled:cursor-not-allowed",
                             user?.theme === "light"
                               ? "border-primary bg-primary/5"
                               : "border-muted hover:border-muted-foreground/50"
@@ -268,9 +285,15 @@ export const SettingsPage: React.FC = () => {
                           )}
                         </button>
                         <button
-                          onClick={() => setTheme("dark")}
+                          onClick={() => {
+                            setTheme("dark");
+                            // Save to backend
+                            updateProfileMutation.mutate({ theme: "dark" });
+                          }}
+                          disabled={updateProfileMutation.isPending}
                           className={cn(
-                            "flex items-center gap-3 p-4 rounded-lg border-2 transition-colors",
+                            "flex items-center gap-3 p-4 rounded-lg border-2 transition-all",
+                            "disabled:opacity-50 disabled:cursor-not-allowed",
                             user?.theme === "dark"
                               ? "border-primary bg-primary/5"
                               : "border-muted hover:border-muted-foreground/50"
@@ -288,6 +311,11 @@ export const SettingsPage: React.FC = () => {
                           )}
                         </button>
                       </div>
+                      {updateProfileMutation.isPending && (
+                        <p className="text-xs text-muted-foreground mt-2">
+                          Saving theme preference...
+                        </p>
+                      )}
                     </div>
                   </div>
                 </CardContent>
@@ -306,36 +334,68 @@ export const SettingsPage: React.FC = () => {
                 <CardContent>
                   <div className="space-y-6">
                     {/* 2FA Section */}
-                    <div className="flex items-center justify-between p-4 rounded-lg border">
-                      <div className="flex items-center gap-4">
-                        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-                          <FontAwesomeIcon icon={faShieldHalved} className="w-5 h-5 text-primary" />
+                    <div className="space-y-4">
+                      <div className="flex items-center justify-between p-4 rounded-lg border">
+                        <div className="flex items-center gap-4">
+                          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
+                            <FontAwesomeIcon icon={faShieldHalved} className="w-5 h-5 text-primary" />
+                          </div>
+                          <div>
+                            <p className="font-medium">Two-Factor Authentication</p>
+                            <p className="text-sm text-muted-foreground">
+                              Add an extra layer of security to your account
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="font-medium">Two-Factor Authentication</p>
-                          <p className="text-sm text-muted-foreground">
-                            Add an extra layer of security to your account
+                        {user?.twoFactorEnabled ? (
+                          <div className="flex items-center gap-3">
+                            <Badge variant="success">
+                              {user.twoFactorMethod === "email" ? "Email 2FA" : "TOTP 2FA"}
+                            </Badge>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setShowDisable2FADialog(true)}
+                            >
+                              Disable
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="flex gap-2">
+                            {siteSettings?.allowTOTP2FA && (
+                              <Button
+                                onClick={handleEnable2FA}
+                                loading={enable2FAMutation.isPending}
+                                variant="outline"
+                              >
+                                Enable TOTP
+                              </Button>
+                            )}
+                            {siteSettings?.allowEmail2FA && user?.emailVerified && (
+                              <Button
+                                onClick={async () => {
+                                  try {
+                                    await authApi.enableEmail2FA();
+                                    toast.success("Email 2FA enabled", "Email-based 2FA has been activated");
+                                    // Refresh user data
+                                    window.location.reload();
+                                  } catch (error) {
+                                    toast.error("Failed to enable", (error as Error).message);
+                                  }
+                                }}
+                              >
+                                Enable Email 2FA
+                              </Button>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      {!user?.emailVerified && siteSettings?.allowEmail2FA && (
+                        <div className="p-3 rounded-lg bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
+                          <p className="text-sm text-yellow-800 dark:text-yellow-200">
+                            Email must be verified to use email-based 2FA
                           </p>
                         </div>
-                      </div>
-                      {user?.twoFactorEnabled ? (
-                        <div className="flex items-center gap-3">
-                          <Badge variant="success">Enabled</Badge>
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={() => setShowDisable2FADialog(true)}
-                          >
-                            Disable
-                          </Button>
-                        </div>
-                      ) : (
-                        <Button
-                          onClick={handleEnable2FA}
-                          loading={enable2FAMutation.isPending}
-                        >
-                          Enable 2FA
-                        </Button>
                       )}
                     </div>
                   </div>
@@ -382,6 +442,9 @@ export const SettingsPage: React.FC = () => {
                 </CardContent>
               </Card>
             )}
+
+            {/* Admin Tab */}
+            {activeTab === "admin" && user?.role === "admin" && <AdminSettingsPanel />}
           </motion.div>
         </div>
       </div>

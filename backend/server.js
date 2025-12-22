@@ -17,9 +17,14 @@ const labelRoutes = require('./routes/labels');
 const commentRoutes = require('./routes/comments');
 const backupRoutes = require('./routes/backup');
 const googleCalendarRoutes = require('./routes/googleCalendar');
+const adminRoutes = require('./routes/admin');
 
 // Import reminder service
 const reminderService = require('./services/reminderService');
+
+// Import middleware
+const { checkMaintenanceMode } = require('./middleware/maintenance');
+const { checkProjectLimit, checkTaskLimit } = require('./middleware/limits');
 
 const app = express();
 
@@ -31,21 +36,36 @@ app.use(cors({
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
+// Maintenance mode check (before routes)
+app.use(checkMaintenanceMode);
+
 // Database connection
 mongoose.connect(process.env.MONGODB_URI || 'mongodb://localhost:27017/projex')
-.then(() => console.log('MongoDB connected successfully'))
+.then(async () => {
+  console.log('MongoDB connected successfully');
+  
+  // Bootstrap site settings on startup
+  try {
+    const SiteSettings = require('./models/SiteSettings');
+    await SiteSettings.getSettings();
+    console.log('Site settings initialized');
+  } catch (error) {
+    console.error('Error initializing site settings:', error);
+  }
+})
 .catch(err => console.error('MongoDB connection error:', err));
 
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
-app.use('/api/tasks', taskRoutes);
-app.use('/api/projects', projectRoutes);
+app.use('/api/tasks', checkTaskLimit, taskRoutes);
+app.use('/api/projects', checkProjectLimit, projectRoutes);
 app.use('/api/lists', listRoutes);
 app.use('/api/labels', labelRoutes);
 app.use('/api/comments', commentRoutes);
 app.use('/api/backup', backupRoutes);
 app.use('/api/google-calendar', googleCalendarRoutes);
+app.use('/api/admin', adminRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

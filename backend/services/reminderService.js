@@ -1,55 +1,50 @@
 const Task = require('../models/Task');
 const User = require('../models/User');
-const nodemailer = require('nodemailer');
-
-// Email transporter setup
-const createTransporter = () => {
-  if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-    console.warn('Email configuration not set. Email reminders will not be sent.');
-    return null;
-  }
-
-  return nodemailer.createTransport({
-    host: process.env.EMAIL_HOST || 'smtp.gmail.com',
-    port: process.env.EMAIL_PORT || 587,
-    secure: false,
-    auth: {
-      user: process.env.EMAIL_USER,
-      pass: process.env.EMAIL_PASS
-    }
-  });
-};
-
-const transporter = createTransporter();
+const { sendEmail, canSendEmail } = require('./emailService');
 
 // Send email reminder
 const sendEmailReminder = async (user, task) => {
-  if (!transporter) {
-    console.log('Email transporter not configured. Skipping email reminder.');
+  // Check if email sending is enabled
+  const emailEnabled = await canSendEmail();
+  if (!emailEnabled) {
+    console.log('Email sending disabled. Skipping email reminder.');
     return;
   }
 
-  try {
-    const dueDate = new Date(task.dueDate).toLocaleString();
-    const mailOptions = {
-      from: `"Projex" <${process.env.EMAIL_USER}>`,
-      to: user.email,
-      subject: `Reminder: ${task.title} is due soon`,
-      html: `
-        <h2>Task Reminder</h2>
-        <p>Hello ${user.firstName || user.username},</p>
-        <p>This is a reminder that your task <strong>${task.title}</strong> is due on ${dueDate}.</p>
-        ${task.description ? `<p>Description: ${task.description}</p>` : ''}
-        <p>Priority: ${task.priority}</p>
-        <p>Please complete this task before the deadline.</p>
-      `
-    };
+  const dueDate = new Date(task.dueDate).toLocaleString();
+  const html = `
+    <!DOCTYPE html>
+    <html>
+      <head>
+        <meta charset="utf-8">
+        <style>
+          body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+          .container { max-width: 600px; margin: 0 auto; padding: 20px; }
+          .task-card { background-color: #f9fafb; padding: 15px; border-radius: 8px; margin: 20px 0; }
+        </style>
+      </head>
+      <body>
+        <div class="container">
+          <h2>Task Reminder</h2>
+          <p>Hello ${user.firstName || user.username},</p>
+          <p>This is a reminder that your task is due soon:</p>
+          <div class="task-card">
+            <h3>${task.title}</h3>
+            ${task.description ? `<p>${task.description}</p>` : ''}
+            <p><strong>Due Date:</strong> ${dueDate}</p>
+            <p><strong>Priority:</strong> ${task.priority}</p>
+          </div>
+          <p>Please complete this task before the deadline.</p>
+        </div>
+      </body>
+    </html>
+  `;
 
-    await transporter.sendMail(mailOptions);
-    console.log(`Email reminder sent to ${user.email} for task: ${task.title}`);
-  } catch (error) {
-    console.error('Error sending email reminder:', error);
-  }
+  await sendEmail({
+    to: user.email,
+    subject: `Reminder: ${task.title} is due soon`,
+    html
+  });
 };
 
 // Check and send reminders

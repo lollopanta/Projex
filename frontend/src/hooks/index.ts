@@ -73,3 +73,11 @@ export {
 
 // Users hooks
 export { userKeys, useSearchUsers, useUser } from "./useUsers";
+
+// Admin hooks
+export {
+  adminKeys,
+  useSiteSettings,
+  useUpdateSiteSettings,
+  useAdminStats,
+} from "./useAdmin";
