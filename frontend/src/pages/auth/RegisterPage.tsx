@@ -57,6 +57,7 @@ export const RegisterPage: React.FC = () => {
   });
 
   const onSubmit = (data: RegisterFormData) => {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const { confirmPassword, ...registerData } = data;
     registerMutation.mutate(registerData, {
       onSuccess: (response) => {

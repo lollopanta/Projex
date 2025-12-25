@@ -38,10 +38,24 @@ import type { List, TaskPopulated } from "@/types";
 export const ProjectDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { openModal } = useUIStore();
-  const { data: project, isLoading, error, isError } = useProject(id || "");
+  
+  // Early return if no ID
+  if (!id) {
+    return (
+      <div className="flex flex-col items-center justify-center py-20">
+        <h1 className="text-2xl font-bold mb-2">Invalid Project</h1>
+        <p className="text-muted-foreground mb-4">Project ID is missing.</p>
+        <Link to="/projects">
+          <Button>Back to Projects</Button>
+        </Link>
+      </div>
+    );
+  }
+  
+  const { data: project, isLoading, error, isError } = useProject(id);
   const { data: lists, isLoading: listsLoading } = useLists({ projectId: id });
   const { data: tasksData } = useTasks({ projectId: id, limit: 100 });
-  const permissions = useProjectPermissions(id || "");
+  const permissions = useProjectPermissions(id);
 
   const [currentView, setCurrentView] = useState<ProjectViewType>("list");
   const [filterQuery, setFilterQuery] = useState("");
@@ -283,13 +297,18 @@ export const ProjectDetailPage: React.FC = () => {
                 }
 
                 if (filteredTasks.length === 0) {
+                  const hasActiveFilter = filterQuery.trim().length > 0;
                   return (
                     <EmptyState
                       icon={faListCheck}
-                      title="No tasks yet"
-                      description="Add tasks to this project to get started."
+                      title={hasActiveFilter ? "No task found" : "No tasks yet"}
+                      description={
+                        hasActiveFilter
+                          ? "No task matches the current filter parameters."
+                          : "Add tasks to this project to get started."
+                      }
                       action={
-                        permissions.canEdit
+                        !hasActiveFilter && permissions.canEdit
                           ? {
                               label: "Add Task",
                               onClick: () => openModal("task", { projectId: id }),

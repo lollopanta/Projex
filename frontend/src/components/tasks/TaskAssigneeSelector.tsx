@@ -6,12 +6,11 @@
  */
 
 import React, { useState, useMemo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faUserPlus,
   faXmark,
-  faUser,
   faChevronDown,
 } from "@fortawesome/free-solid-svg-icons";
 import { Button } from "@/components/ui/button";
@@ -25,8 +24,8 @@ import { UserAvatar } from "@/components/ui/avatar";
 import { useSearchUsers } from "@/hooks/useUsers";
 import { useProject } from "@/hooks/useProjects";
 import { useList } from "@/hooks/useLists";
-import { cn, debounce } from "@/lib/utils";
-import type { UserPublic, ObjectId, Project, List } from "@/types";
+import { cn } from "@/lib/utils";
+import type { UserPublic, ObjectId } from "@/types";
 
 interface TaskAssigneeSelectorProps {
   assignees: UserPublic[];
@@ -147,7 +146,7 @@ export const TaskAssigneeSelector: React.FC<TaskAssigneeSelectorProps> = ({
     onChange(assignees.filter((a) => a._id !== userId).map((a) => a._id));
   };
 
-  const avatarSize = size === "sm" ? "xs" : size === "md" ? "sm" : "md";
+  const avatarSize = size === "sm" ? "sm" : size === "md" ? "md" : "lg";
 
   return (
     <div className={cn("flex items-center gap-2", className)}>

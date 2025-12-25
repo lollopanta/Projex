@@ -7,7 +7,6 @@ const {
   getAuthUrl,
   getTokens,
   createCalendarEvent,
-  updateCalendarEvent,
   deleteCalendarEvent
 } = require('../services/googleCalendarService');
 

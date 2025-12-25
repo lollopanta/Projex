@@ -25,6 +25,10 @@ export const taskKeys = {
   details: () => [...taskKeys.all, "detail"] as const,
   detail: (id: string) => [...taskKeys.details(), id] as const,
   infinite: (filters?: TaskQueryParams) => [...taskKeys.all, "infinite", filters] as const,
+  dependencies: () => [...taskKeys.all, "dependencies"] as const,
+  dependency: (id: string) => [...taskKeys.dependencies(), id] as const,
+  impact: () => [...taskKeys.all, "impact"] as const,
+  impactDetail: (id: string) => [...taskKeys.impact(), id] as const,
 };
 
 /**
@@ -99,13 +103,14 @@ export const useUpdateTask = () => {
     mutationFn: ({ id, data }: { id: string; data: UpdateTaskRequest }) =>
       tasksApi.updateTask(id, data),
     onMutate: async ({ id, data }) => {
-      // Cancel outgoing refetches
+      // Cancel outgoing refetches to prevent race conditions
       await queryClient.cancelQueries({ queryKey: taskKeys.detail(id) });
+      await queryClient.cancelQueries({ queryKey: taskKeys.lists() });
 
       // Snapshot previous value
       const previousTask = queryClient.getQueryData<TaskPopulated>(taskKeys.detail(id));
 
-      // Optimistically update
+      // Optimistically update the task
       if (previousTask) {
         queryClient.setQueryData<TaskPopulated>(taskKeys.detail(id), {
           ...previousTask,
@@ -122,12 +127,34 @@ export const useUpdateTask = () => {
       }
       toast.error("Failed to update task", error.message);
     },
-    onSettled: () => {
-      // Refetch to ensure consistency
-      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
-    },
-    onSuccess: () => {
+    onSuccess: (updatedTask, variables) => {
+      // Update the task in the detail query cache
+      queryClient.setQueryData(taskKeys.detail(updatedTask._id), updatedTask);
+      
+      // Update the task in list queries optimistically
+      queryClient.setQueriesData(
+        { queryKey: taskKeys.lists(), exact: false },
+        (old: any) => {
+          if (!old || !old.tasks) return old;
+          return {
+            ...old,
+            tasks: old.tasks.map((t: TaskPopulated) =>
+              t._id === updatedTask._id ? updatedTask : t
+            ),
+          };
+        }
+      );
+      
+      // Invalidate after a short delay to allow UI to update first
+      setTimeout(() => {
+        queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+        queryClient.invalidateQueries({ queryKey: ["projects"] });
+      }, 100);
+      
       toast.success("Task updated", "Your changes have been saved");
+    },
+    onSettled: () => {
+      // Additional cleanup if needed
     },
   });
 };
@@ -212,5 +239,73 @@ export const useAddSubtask = () => {
     onError: (error: Error) => {
       toast.error("Failed to add subtask", error.message);
     },
+  });
+};
+
+/**
+ * Hook to get task dependency graph
+ */
+export const useTaskDependencies = (taskId: string) => {
+  return useQuery({
+    queryKey: taskKeys.dependency(taskId),
+    queryFn: () => tasksApi.getTaskDependencies(taskId),
+    enabled: !!taskId,
+    staleTime: 1000 * 30, // 30 seconds
+  });
+};
+
+/**
+ * Hook to add dependencies to a task
+ */
+export const useAddTaskDependencies = () => {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: ({ taskId, dependencies }: { taskId: string; dependencies: string[] }) =>
+      tasksApi.addTaskDependencies(taskId, dependencies),
+    onSuccess: (updatedTask) => {
+      queryClient.setQueryData(taskKeys.detail(updatedTask._id), updatedTask);
+      queryClient.invalidateQueries({ queryKey: taskKeys.dependency(updatedTask._id) });
+      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      toast.success("Dependencies added", "Task dependencies have been updated");
+    },
+    onError: (error: Error) => {
+      toast.error("Failed to add dependencies", error.message);
+    },
+  });
+};
+
+/**
+ * Hook to remove a dependency from a task
+ */
+export const useRemoveTaskDependency = () => {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: ({ taskId, dependencyId }: { taskId: string; dependencyId: string }) =>
+      tasksApi.removeTaskDependency(taskId, dependencyId),
+    onSuccess: (updatedTask) => {
+      queryClient.setQueryData(taskKeys.detail(updatedTask._id), updatedTask);
+      queryClient.invalidateQueries({ queryKey: taskKeys.dependency(updatedTask._id) });
+      queryClient.invalidateQueries({ queryKey: taskKeys.lists() });
+      toast.success("Dependency removed", "The dependency has been removed");
+    },
+    onError: (error: Error) => {
+      toast.error("Failed to remove dependency", error.message);
+    },
+  });
+};
+
+/**
+ * Hook to get task impact analysis
+ */
+export const useTaskImpact = (taskId: string) => {
+  return useQuery({
+    queryKey: taskKeys.impactDetail(taskId),
+    queryFn: () => tasksApi.getTaskImpact(taskId),
+    enabled: !!taskId,
+    staleTime: 1000 * 60, // 1 minute
   });
 };

@@ -21,7 +21,6 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { UserAvatar } from "@/components/ui/avatar";
 import { useAuthStore } from "@/store";
-import { cn } from "@/lib/utils";
 import dayjs from "dayjs";
 
 export const ProfilePage: React.FC = () => {

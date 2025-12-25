@@ -136,6 +136,19 @@ export const deleteKanbanColumn = async (
   return response.data;
 };
 
+/**
+ * Reorder Kanban columns
+ */
+export const reorderKanbanColumns = async (
+  projectId: string,
+  columnIds: string[]
+): ApiResponse<KanbanColumn[]> => {
+  const response = await apiClient.put<KanbanColumn[]>(`/projects/${projectId}/columns/reorder`, {
+    columnIds,
+  });
+  return response.data;
+};
+
 // Export all functions as an object for convenience (must be after all function declarations)
 export const projectsApi = {
   getProjects,
@@ -150,4 +163,5 @@ export const projectsApi = {
   createKanbanColumn,
   updateKanbanColumn,
   deleteKanbanColumn,
+  reorderKanbanColumns,
 };

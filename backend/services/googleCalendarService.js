@@ -1,5 +1,4 @@
 const { google } = require('googleapis');
-const User = require('../models/User');
 
 // Initialize OAuth2 client
 const oauth2Client = new google.auth.OAuth2(

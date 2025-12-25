@@ -16,7 +16,6 @@ import { useTasks } from "@/hooks/useTasks";
 import { useUIStore } from "@/store";
 import { TaskList } from "@/components/tasks/TaskList";
 import dayjs from "dayjs";
-import { cn, isOverdue } from "@/lib/utils";
 
 export const TodayPage: React.FC = () => {
   const { openModal } = useUIStore();

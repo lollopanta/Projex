@@ -46,68 +46,165 @@ export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
 
   const [columns, setColumns] = useState<KanbanColumnWithTasks[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [isUpdatingTask, setIsUpdatingTask] = useState(false);
 
-  // Initialize columns from project or use defaults
+  // Debug: Log permissions and columns
+  React.useEffect(() => {
+    if (projectColumns.length > 0) {
+      console.log('Project columns loaded:', projectColumns.map(c => ({ id: c._id, name: c.name, type: typeof c._id })));
+    } else {
+      console.log('No project columns - using defaults');
+    }
+  }, [projectColumns]);
+
+  // Initialize columns from project or use defaults (only when columns structure changes)
   useEffect(() => {
     if (columnsLoading) return;
+    
+    // Don't update columns if we're in the middle of updating a task (drag operation)
+    if (isUpdatingTask) return;
 
-    if (projectColumns.length > 0) {
-      // Use project columns
-      const columnsWithTasks: KanbanColumnWithTasks[] = projectColumns.map((col) => ({
-        ...col,
-        taskIds: tasks
-          .filter((t) => t.kanbanColumnId === col._id)
-          .map((t) => t._id),
-      }));
-      setColumns(columnsWithTasks);
-    } else {
-      // Use default columns (for backward compatibility)
-      const defaultColumns: KanbanColumnWithTasks[] = [
-        { _id: "todo", name: "To Do", color: "#6366F1", position: 0, createdAt: new Date().toISOString(), taskIds: tasks.filter((t) => !t.completed && !t.kanbanColumnId).map((t) => t._id) },
-        { _id: "in-progress", name: "In Progress", color: "#F59E0B", position: 1, createdAt: new Date().toISOString(), taskIds: [] },
-        { _id: "done", name: "Done", color: "#22C55E", position: 2, createdAt: new Date().toISOString(), taskIds: tasks.filter((t) => t.completed && !t.kanbanColumnId).map((t) => t._id) },
-      ];
-      setColumns(defaultColumns);
+    // Only reinitialize if columns structure changed (new columns added/removed), not on task updates
+    const currentColumnIds = columns.map(c => c._id).sort().join(',');
+    const newColumnIds = projectColumns.length > 0 
+      ? projectColumns.map(c => c._id).sort().join(',')
+      : 'todo,in-progress,done';
+
+    if (currentColumnIds !== newColumnIds || columns.length === 0) {
+      // Column structure changed or first load, reinitialize
+      if (projectColumns.length > 0) {
+        // Use project columns - assign tasks based on kanbanColumnId
+        // Tasks with kanbanColumnId: null should be assigned to the first column (usually "To Do")
+        const firstColumnId = projectColumns[0]._id;
+        // Find the "Done" column by name (case-insensitive)
+        const doneColumn = projectColumns.find((col) => col.name.toLowerCase() === 'done');
+        const doneColumnId = doneColumn?._id;
+        
+        const columnsWithTasks: KanbanColumnWithTasks[] = projectColumns.map((col) => {
+          // Tasks that explicitly belong to this column
+          let assignedTasks = tasks
+            .filter((t) => t.kanbanColumnId === col._id)
+            .map((t) => t._id);
+          
+          // If this is the Done column, also include completed tasks with kanbanColumnId: null
+          if (col._id === doneColumnId) {
+            const completedUnassignedTasks = tasks
+              .filter((t) => t.completed && !t.kanbanColumnId)
+              .map((t) => t._id);
+            assignedTasks = [...new Set([...assignedTasks, ...completedUnassignedTasks])];
+          }
+          // If this is the first column, also include incomplete tasks with kanbanColumnId: null
+          else if (col._id === firstColumnId) {
+            const unassignedTasks = tasks
+              .filter((t) => !t.kanbanColumnId && !t.completed)
+              .map((t) => t._id);
+            assignedTasks = [...new Set([...assignedTasks, ...unassignedTasks])];
+          }
+          
+          return {
+            ...col,
+            taskIds: assignedTasks,
+          };
+        });
+        setColumns(columnsWithTasks);
+      } else {
+        // No project columns - use default columns
+        const defaultColumns: KanbanColumnWithTasks[] = [
+          { _id: "todo", name: "To Do", color: "#6366F1", position: 0, createdAt: new Date().toISOString(), taskIds: tasks.filter((t) => !t.completed && !t.kanbanColumnId).map((t) => t._id) },
+          { _id: "in-progress", name: "In Progress", color: "#F59E0B", position: 1, createdAt: new Date().toISOString(), taskIds: [] },
+          { _id: "done", name: "Done", color: "#22C55E", position: 2, createdAt: new Date().toISOString(), taskIds: tasks.filter((t) => t.completed && !t.kanbanColumnId).map((t) => t._id) },
+        ];
+        setColumns(defaultColumns);
+      }
     }
-  }, [projectColumns, tasks, columnsLoading]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [projectColumns, columnsLoading]); // Intentionally exclude 'tasks' and 'columns' to prevent reset on task updates
+
+  // Update task assignments when tasks change (without resetting column structure)
+  useEffect(() => {
+    if (columnsLoading || columns.length === 0 || isUpdatingTask) return;
+
+    // Update task assignments for existing columns
+    if (projectColumns.length > 0) {
+      // Use project columns - assign tasks based on kanbanColumnId
+      // Tasks with kanbanColumnId: null should be assigned to the first column
+      const firstColumnId = projectColumns[0]._id;
+      setColumns(prevColumns => prevColumns.map(col => {
+        // Tasks that explicitly belong to this column
+        const assignedTasks = tasks
+          .filter((t) => t.kanbanColumnId === col._id)
+          .map((t) => t._id);
+        
+        // If this is the first column, also include tasks with kanbanColumnId: null
+        if (col._id === firstColumnId) {
+          const unassignedTasks = tasks
+            .filter((t) => !t.kanbanColumnId)
+            .map((t) => t._id);
+          return {
+            ...col,
+            taskIds: [...new Set([...assignedTasks, ...unassignedTasks])], // Remove duplicates
+          };
+        }
+        
+        return {
+          ...col,
+          taskIds: assignedTasks,
+        };
+      }));
+    } else {
+      // Default columns - update based on completion status
+      setColumns(prevColumns => prevColumns.map(col => {
+        if (col._id === "todo") {
+          return { ...col, taskIds: tasks.filter((t) => !t.completed && !t.kanbanColumnId).map((t) => t._id) };
+        } else if (col._id === "done") {
+          return { ...col, taskIds: tasks.filter((t) => t.completed && !t.kanbanColumnId).map((t) => t._id) };
+        }
+        return col;
+      }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tasks]); // Only update task assignments, not column structure
 
   const handleDragStart = (event: DragStartEvent) => {
+    console.log('Drag started:', event.active.id, 'canDragTasks:', permissions.canDragTasks);
+    // Always set activeId - we'll check permissions in handleDragEnd
     setActiveId(event.active.id as string);
   };
 
   const handleDragOver = (event: DragOverEvent) => {
-    const { active, over } = event;
-    if (!over) return;
-
-    const taskId = active.id as string;
-    const overId = over.id as string;
-
-    // Check if dragging over a column
-    const targetColumn = columns.find((col) => col._id === overId);
-    if (targetColumn) {
-      // Task is being dragged over a column
-      const sourceColumn = columns.find((col) => col.taskIds.includes(taskId));
-      if (sourceColumn && sourceColumn._id !== targetColumn._id) {
-        // Moving between columns
-        const updatedColumns = columns.map((col) => {
-          if (col._id === sourceColumn._id) {
-            return { ...col, taskIds: col.taskIds.filter((id) => id !== taskId) };
-          }
-          if (col._id === targetColumn._id && !col.taskIds.includes(taskId)) {
-            return { ...col, taskIds: [...col.taskIds, taskId] };
-          }
-          return col;
-        });
-        setColumns(updatedColumns);
-      }
-    }
+    // Visual feedback only - don't update state here, let handleDragEnd handle it
+    // This prevents conflicts between dragOver and dragEnd handlers
   };
 
   const handleDragEnd = (event: DragEndEvent) => {
+    console.log('Drag end called:', { active: event.active.id, over: event.over?.id, canDragTasks: permissions.canDragTasks });
     const { active, over } = event;
     setActiveId(null);
 
-    if (!over || !permissions.canDragTasks) {
+    if (!permissions.canDragTasks) {
+      console.log('Cannot drag - permission denied');
+      // Reset columns if drag was cancelled
+      if (projectColumns.length > 0) {
+        const columnsWithTasks: KanbanColumnWithTasks[] = projectColumns.map((col) => ({
+          ...col,
+          taskIds: tasks
+            .filter((t) => t.kanbanColumnId === col._id)
+            .map((t) => t._id),
+        }));
+        setColumns(columnsWithTasks);
+      } else {
+        const defaultColumns: KanbanColumnWithTasks[] = [
+          { _id: "todo", name: "To Do", color: "#6366F1", position: 0, createdAt: new Date().toISOString(), taskIds: tasks.filter((t) => !t.completed && !t.kanbanColumnId).map((t) => t._id) },
+          { _id: "in-progress", name: "In Progress", color: "#F59E0B", position: 1, createdAt: new Date().toISOString(), taskIds: [] },
+          { _id: "done", name: "Done", color: "#22C55E", position: 2, createdAt: new Date().toISOString(), taskIds: tasks.filter((t) => t.completed && !t.kanbanColumnId).map((t) => t._id) },
+        ];
+        setColumns(defaultColumns);
+      }
+      return;
+    }
+
+    if (!over) {
+      console.log('No over target');
       // Reset columns if drag was cancelled
       if (projectColumns.length > 0) {
         const columnsWithTasks: KanbanColumnWithTasks[] = projectColumns.map((col) => ({
@@ -131,13 +228,28 @@ export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
     const taskId = active.id as string;
     const overId = over.id as string;
 
+    console.log('Processing drag:', { taskId, overId, columns: columns.map(c => ({ id: c._id, name: c.name, taskIds: c.taskIds })) });
+
     // Find source column
     const sourceColumn = columns.find((col) => col.taskIds.includes(taskId));
-    if (!sourceColumn) return;
+    if (!sourceColumn) {
+      console.log('Source column not found for task:', taskId);
+      return;
+    }
+
+    console.log('Source column:', sourceColumn._id);
+    console.log('Project columns:', projectColumns);
+    console.log('Current columns:', columns.map(c => ({ id: c._id, name: c.name })));
 
     // Check if dropped on a column (droppable area)
     const targetColumn = columns.find((col) => col._id === overId);
     if (targetColumn && targetColumn._id !== sourceColumn._id) {
+      console.log('Dropped on column:', targetColumn._id, 'Type:', typeof targetColumn._id);
+      
+      // Check if this column exists in projectColumns (has real ObjectId)
+      const projectColumn = projectColumns.find((col) => col._id === targetColumn._id);
+      console.log('Found project column:', projectColumn);
+      
       // Moving task to a different column
       const updatedColumns = columns.map((col) => {
         if (col._id === sourceColumn._id) {
@@ -149,14 +261,114 @@ export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
         return col;
       });
       setColumns(updatedColumns);
-      onColumnsChange?.(updatedColumns);
 
       // Update task in backend
-      if (targetColumn._id === "done") {
-        updateTask.mutate({ id: taskId, data: { completed: true } });
-      } else if (targetColumn._id === "todo") {
-        updateTask.mutate({ id: taskId, data: { completed: false } });
+      // If projectColumns exist, always use project columns (they have ObjectIds)
+      // Only use default column logic if no project columns exist
+      let updateData: { kanbanColumnId: string | null; completed?: boolean };
+      
+      if (projectColumns.length > 0) {
+        // Project columns exist - find the matching column by name or ID
+        // Try to find by ID first (in case IDs match)
+        let matchingProjectColumn = projectColumns.find((col) => col._id === targetColumn._id);
+        
+        // If not found by ID, try to find by name (for default columns that were converted to project columns)
+        if (!matchingProjectColumn) {
+          matchingProjectColumn = projectColumns.find((col) => {
+            const targetName = targetColumn.name.toLowerCase();
+            const colName = col.name.toLowerCase();
+            return (targetName === 'in progress' && colName === 'in progress') ||
+                   (targetName === 'to do' && colName === 'to do') ||
+                   (targetName === 'done' && colName === 'done') ||
+                   colName === targetName;
+          });
+        }
+        
+        if (matchingProjectColumn) {
+          // Found matching project column - use its ObjectId
+          console.log('Using project column ObjectId:', matchingProjectColumn._id, 'for column:', targetColumn.name);
+          // If moving to Done column, mark as completed
+          const isDoneColumn = matchingProjectColumn.name.toLowerCase() === 'done';
+          // If moving from Done to another column, uncomplete
+          const isMovingFromDone = sourceColumn.name.toLowerCase() === 'done';
+          updateData = { 
+            kanbanColumnId: matchingProjectColumn._id,
+            ...(isDoneColumn ? { completed: true } : isMovingFromDone ? { completed: false } : {})
+          };
+        } else {
+          // Column not found in projectColumns - use the targetColumn._id (might be ObjectId already)
+          console.warn('Column not found in projectColumns, using targetColumn._id:', targetColumn._id);
+          // Check if it's a valid ObjectId format
+          const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(targetColumn._id);
+          if (isValidObjectId) {
+            updateData = { kanbanColumnId: targetColumn._id };
+          } else {
+            // Invalid ObjectId, treat as default column
+            if (targetColumn._id === "done") {
+              updateData = { completed: true, kanbanColumnId: null };
+            } else if (targetColumn._id === "todo") {
+              updateData = { completed: false, kanbanColumnId: null };
+            } else {
+              // For other columns, uncomplete if it was completed
+              const task = tasks.find((t) => t._id === taskId);
+              updateData = { 
+                kanbanColumnId: null,
+                ...(task?.completed ? { completed: false } : {})
+              };
+            }
+          }
+        }
+      } else {
+        // No project columns - using default columns
+        const isMovingFromDone = sourceColumn._id === "done";
+        if (targetColumn._id === "done") {
+          updateData = { completed: true, kanbanColumnId: null };
+        } else if (targetColumn._id === "todo") {
+          updateData = { completed: false, kanbanColumnId: null };
+        } else {
+          // in-progress or other default columns - uncomplete if moving from Done
+          updateData = { 
+            kanbanColumnId: null,
+            ...(isMovingFromDone ? { completed: false } : {})
+          };
+        }
       }
+
+      console.log('Calling updateTask mutation:', { 
+        taskId, 
+        updateData, 
+        targetColumnId: targetColumn._id,
+        projectColumnsLength: projectColumns.length,
+        isProjectColumn: projectColumns.length > 0 && projectColumns.some(c => c._id === targetColumn._id)
+      });
+      setIsUpdatingTask(true);
+      updateTask.mutate(
+        { id: taskId, data: updateData },
+        {
+          onSuccess: (updatedTask) => {
+            console.log('Task updated successfully:', { 
+              taskId: updatedTask._id, 
+              kanbanColumnId: updatedTask.kanbanColumnId 
+            });
+            // Keep columns as-is, they're already updated optimistically
+            setTimeout(() => setIsUpdatingTask(false), 500); // Allow time for backend to process
+          },
+          onError: (error) => {
+            console.error('Task update failed:', error);
+            setIsUpdatingTask(false);
+            // Reset columns on error
+            if (projectColumns.length > 0) {
+              const columnsWithTasks: KanbanColumnWithTasks[] = projectColumns.map((col) => ({
+                ...col,
+                taskIds: tasks
+                  .filter((t) => t.kanbanColumnId === col._id)
+                  .map((t) => t._id),
+              }));
+              setColumns(columnsWithTasks);
+            }
+          },
+        }
+      );
       return;
     }
 
@@ -165,21 +377,27 @@ export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
     const overTaskColumn = columns.find((col) => col.taskIds.includes(overTaskId));
     
     if (overTaskColumn) {
+      console.log('Dropped on task in column:', overTaskColumn._id);
       if (sourceColumn._id === overTaskColumn._id) {
         // Reordering within same column
+        if (taskId === overTaskId) {
+          return; // Dropped on same task, no-op
+        }
         const oldIndex = sourceColumn.taskIds.indexOf(taskId);
         const newIndex = overTaskColumn.taskIds.indexOf(overTaskId);
         
-        const updatedColumns = columns.map((col) => {
-          if (col._id === sourceColumn._id) {
-            return {
-              ...col,
-              taskIds: arrayMove(col.taskIds, oldIndex, newIndex),
-            };
-          }
-          return col;
-        });
-        setColumns(updatedColumns);
+        if (oldIndex !== newIndex) {
+          const updatedColumns = columns.map((col) => {
+            if (col._id === sourceColumn._id) {
+              return {
+                ...col,
+                taskIds: arrayMove(col.taskIds, oldIndex, newIndex),
+              };
+            }
+            return col;
+          });
+          setColumns(updatedColumns);
+        }
       } else {
         // Moving to different column by dropping on a task
         const newIndex = overTaskColumn.taskIds.indexOf(overTaskId);
@@ -196,15 +414,105 @@ export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
         });
         setColumns(updatedColumns);
 
-        // Update task in backend with kanbanColumnId
-        if (overTaskColumn._id === "done") {
-          updateTask.mutate({ id: taskId, data: { kanbanColumnId: overTaskColumn._id, completed: true } });
-        } else if (overTaskColumn._id === "todo") {
-          updateTask.mutate({ id: taskId, data: { kanbanColumnId: overTaskColumn._id, completed: false } });
+        // Update task in backend
+        // If projectColumns exist, always use project columns (they have ObjectIds)
+        // Only use default column logic if no project columns exist
+        let updateData: { kanbanColumnId: string | null; completed?: boolean };
+        
+        if (projectColumns.length > 0) {
+          // Project columns exist - find the matching column by name or ID
+          let matchingProjectColumn = projectColumns.find((col) => col._id === overTaskColumn._id);
+          
+          // If not found by ID, try to find by name
+          if (!matchingProjectColumn) {
+            matchingProjectColumn = projectColumns.find((col) => {
+              const targetName = overTaskColumn.name.toLowerCase();
+              const colName = col.name.toLowerCase();
+              return (targetName === 'in progress' && colName === 'in progress') ||
+                     (targetName === 'to do' && colName === 'to do') ||
+                     (targetName === 'done' && colName === 'done') ||
+                     colName === targetName;
+            });
+          }
+          
+          if (matchingProjectColumn) {
+            // If moving to Done column, mark as completed
+            const isDoneColumn = matchingProjectColumn.name.toLowerCase() === 'done';
+            // If moving from Done to another column, uncomplete
+            const isMovingFromDone = sourceColumn.name.toLowerCase() === 'done';
+            updateData = { 
+              kanbanColumnId: matchingProjectColumn._id,
+              ...(isDoneColumn ? { completed: true } : isMovingFromDone ? { completed: false } : {})
+            };
+          } else {
+            // Check if it's a valid ObjectId format
+            const isValidObjectId = /^[0-9a-fA-F]{24}$/.test(overTaskColumn._id);
+            if (isValidObjectId) {
+              // Check if moving from Done
+              const isMovingFromDone = sourceColumn.name.toLowerCase() === 'done';
+              updateData = { 
+                kanbanColumnId: overTaskColumn._id,
+                ...(isMovingFromDone ? { completed: false } : {})
+              };
+            } else {
+              // Invalid ObjectId, treat as default column
+              if (overTaskColumn._id === "done") {
+                updateData = { completed: true, kanbanColumnId: null };
+              } else if (overTaskColumn._id === "todo") {
+                updateData = { completed: false, kanbanColumnId: null };
+              } else {
+                // For other columns, uncomplete if moving from Done
+                const isMovingFromDone = sourceColumn.name.toLowerCase() === 'done';
+                updateData = { 
+                  kanbanColumnId: null,
+                  ...(isMovingFromDone ? { completed: false } : {})
+                };
+              }
+            }
+          }
         } else {
-          updateTask.mutate({ id: taskId, data: { kanbanColumnId: overTaskColumn._id } });
+          // No project columns - using default columns
+          const isMovingFromDone = sourceColumn._id === "done";
+          if (overTaskColumn._id === "done") {
+            updateData = { completed: true, kanbanColumnId: null };
+          } else if (overTaskColumn._id === "todo") {
+            updateData = { completed: false, kanbanColumnId: null };
+          } else {
+            // in-progress or other default columns - uncomplete if moving from Done
+            updateData = { 
+              kanbanColumnId: null,
+              ...(isMovingFromDone ? { completed: false } : {})
+            };
+          }
         }
+
+        console.log('Calling updateTask mutation (dropped on task):', { taskId, updateData });
+        setIsUpdatingTask(true);
+        updateTask.mutate(
+          { id: taskId, data: updateData },
+          {
+            onSuccess: () => {
+              // Keep columns as-is, they're already updated optimistically
+              setTimeout(() => setIsUpdatingTask(false), 500); // Allow time for backend to process
+            },
+            onError: () => {
+              setIsUpdatingTask(false);
+              // Reset columns on error
+              if (projectColumns.length > 0) {
+                const columnsWithTasks: KanbanColumnWithTasks[] = projectColumns.map((col) => ({
+                  ...col,
+                  taskIds: tasks
+                    .filter((t) => t.kanbanColumnId === col._id)
+                    .map((t) => t._id),
+                }));
+                setColumns(columnsWithTasks);
+              }
+            },
+          }
+        );
       }
+    } else {
+      console.log('Not dropped on column or task, overId:', overId);
     }
   };
 
@@ -216,7 +524,7 @@ export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
 
     const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
       id: taskId,
-      disabled: !permissions.canDragTasks,
+      disabled: false, // Always allow dragging - we'll check permissions in handleDragEnd
     });
 
     const style = {
@@ -237,8 +545,9 @@ export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
           isDragging && "opacity-50"
         )}
         onClick={(e) => {
-          // Only open modal if not dragging
-          if (!isDragging) {
+          // Only open modal if not dragging and not starting a drag
+          if (!isDragging && !attributes['aria-pressed']) {
+            e.stopPropagation();
             openModal("taskDetail", task);
           }
         }}
@@ -273,7 +582,7 @@ export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
   };
 
   const Column: React.FC<{ column: KanbanColumnWithTasks }> = ({ column }) => {
-    const { setNodeRef, isOver } = useDroppable({
+    const { setNodeRef: setColumnRef, isOver } = useDroppable({
       id: column._id,
     });
 
@@ -299,14 +608,15 @@ export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
             </div>
           </CardHeader>
           <CardContent 
-            ref={setNodeRef}
+            ref={setColumnRef}
             className={cn("flex-1 overflow-y-auto", isOver && "bg-muted/30")}
+            data-droppable-id={column._id}
           >
             <SortableContext
               items={column.taskIds}
               strategy={verticalListSortingStrategy}
             >
-              <div className="space-y-2 min-h-[100px]">
+              <div className="space-y-2 min-h-[100px]" data-column-id={column._id}>
                 <AnimatePresence mode="popLayout">
                   {columnTasks.map((task) => (
                     <TaskCard key={task._id} taskId={task._id} />

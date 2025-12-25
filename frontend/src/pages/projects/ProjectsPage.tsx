@@ -12,16 +12,13 @@ import {
   faFolderOpen,
   faPlus,
   faUsers,
-  faListCheck,
-  faCheck,
 } from "@fortawesome/free-solid-svg-icons";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useProjects } from "@/hooks/useProjects";
 import { useUIStore } from "@/store";
-import { cn } from "@/lib/utils";
 import type { Project } from "@/types";
 
 export const ProjectsPage: React.FC = () => {

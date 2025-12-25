@@ -46,6 +46,7 @@ const taskSchema = new mongoose.Schema({
   },
   kanbanColumnId: {
     type: mongoose.Schema.Types.ObjectId,
+    ref: 'Project.kanbanColumns',
     default: null
   },
   createdBy: {
@@ -137,6 +138,20 @@ const taskSchema = new mongoose.Schema({
     ref: 'Task',
     default: null
   },
+  // Task dependencies: this task depends on tasks in this array
+  // If task A has task B in dependencies, then A → B means A is blocked by B
+  // Direction: dependencies array contains tasks that THIS task depends on
+  dependencies: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'Task',
+    validate: {
+      validator: function(v) {
+        // Prevent self-dependency
+        return !this._id || v.toString() !== this._id.toString();
+      },
+      message: 'A task cannot depend on itself'
+    }
+  }],
   attachments: [{
     filename: String,
     path: String,
@@ -177,5 +192,6 @@ taskSchema.index({ assignedTo: 1 });
 taskSchema.index({ dueDate: 1 });
 taskSchema.index({ completed: 1 });
 taskSchema.index({ createdBy: 1 });
+taskSchema.index({ dependencies: 1 }); // For dependency queries
 
 module.exports = mongoose.model('Task', taskSchema);

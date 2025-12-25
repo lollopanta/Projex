@@ -41,7 +41,7 @@ import { useSearchUsers } from "@/hooks/useUsers";
 import { useAuthStore, useToast } from "@/store";
 import { cn, debounce } from "@/lib/utils";
 import { getProjectRole, canManageMembers } from "@/lib/permissions";
-import type { Project, MemberRole, UserPublic } from "@/types";
+import type { MemberRole } from "@/types";
 import { ConfirmDialog } from "@/components/common/ConfirmDialog";
 
 interface ProjectMembersPanelProps {
@@ -61,7 +61,7 @@ export const ProjectMembersPanel: React.FC<ProjectMembersPanelProps> = ({ projec
   const [selectedRole, setSelectedRole] = useState<MemberRole>("editor");
   const [memberToRemove, setMemberToRemove] = useState<{ id: string; name: string } | null>(null);
 
-  const debouncedSearch = debounce((query: string) => {
+  const debouncedSearch = debounce((..._args: unknown[]) => {
     // Search is handled by useSearchUsers hook
   }, 300);
 
@@ -134,7 +134,6 @@ export const ProjectMembersPanel: React.FC<ProjectMembersPanelProps> = ({ projec
     }
   };
 
-  const ownerId = typeof project.owner === "string" ? project.owner : project.owner._id;
   const ownerData = typeof project.owner === "string" ? null : project.owner;
 
   return (

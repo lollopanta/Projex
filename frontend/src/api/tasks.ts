@@ -13,6 +13,8 @@ import type {
   TaskQueryParams,
   PaginatedResponse,
   MessageResponse,
+  DependencyGraph,
+  ImpactAnalysis,
 } from "@/types";
 
 /**
@@ -76,5 +78,47 @@ export const addSubtask = async (
   data: CreateSubtaskRequest
 ): ApiResponse<TaskPopulated> => {
   const response = await apiClient.post<TaskPopulated>(`/tasks/${taskId}/subtasks`, data);
+  return response.data;
+};
+
+/**
+ * Get dependency graph for a task
+ */
+export const getTaskDependencies = async (taskId: string): ApiResponse<DependencyGraph> => {
+  const response = await apiClient.get<DependencyGraph>(`/tasks/${taskId}/dependencies`);
+  return response.data;
+};
+
+/**
+ * Add dependencies to a task
+ */
+export const addTaskDependencies = async (
+  taskId: string,
+  dependencies: string[]
+): ApiResponse<TaskPopulated> => {
+  const response = await apiClient.post<TaskPopulated>(`/tasks/${taskId}/dependencies`, {
+    dependencies,
+  });
+  return response.data;
+};
+
+/**
+ * Remove a dependency from a task
+ */
+export const removeTaskDependency = async (
+  taskId: string,
+  dependencyId: string
+): ApiResponse<TaskPopulated> => {
+  const response = await apiClient.delete<TaskPopulated>(
+    `/tasks/${taskId}/dependencies/${dependencyId}`
+  );
+  return response.data;
+};
+
+/**
+ * Get impact analysis for a task
+ */
+export const getTaskImpact = async (taskId: string): ApiResponse<ImpactAnalysis> => {
+  const response = await apiClient.get<ImpactAnalysis>(`/tasks/${taskId}/impact`);
   return response.data;
 };

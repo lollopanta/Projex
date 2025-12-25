@@ -30,7 +30,7 @@ const siteSettingsSchema = new mongoose.Schema({
   defaultTheme: {
     type: String,
     enum: ['light', 'dark'],
-    default: 'light'
+    default: 'dark'
   },
   registrationEnabled: {
     type: Boolean,

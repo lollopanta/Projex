@@ -8,7 +8,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { adminApi } from "@/api";
 import { useToast } from "@/store";
-import type { SiteSettings, UpdateSiteSettingsRequest, AdminStats } from "@/types";
+import type { SiteSettings, UpdateSiteSettingsRequest } from "@/types";
 
 // Query keys
 export const adminKeys = {

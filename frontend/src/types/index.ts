@@ -183,17 +183,61 @@ export interface Task extends Timestamps {
   isRecurring: boolean;
   recurringPattern?: RecurringPattern | null;
   parentTask?: Task | ObjectId | null;
+  dependencies?: (Task | ObjectId)[]; // Tasks this task depends on
   attachments: Attachment[];
   googleCalendarEventId?: string | null;
+  isBlocked?: boolean; // Computed field: true if any dependency is incomplete
 }
 
-export interface TaskPopulated extends Omit<Task, "list" | "project" | "createdBy" | "assignedTo" | "labels" | "parentTask"> {
+export interface TaskPopulated extends Omit<Task, "list" | "project" | "createdBy" | "assignedTo" | "labels" | "parentTask" | "dependencies"> {
   list: Pick<List, "_id" | "name" | "color">;
   project?: Pick<Project, "_id" | "name" | "color"> | null;
   createdBy: UserPublic;
   assignedTo: UserPublic[];
   labels: Label[];
   parentTask?: Pick<Task, "_id" | "title"> | null;
+  dependencies?: (TaskDependency | ObjectId)[]; // Populated dependencies or IDs
+}
+
+export interface TaskDependency {
+  _id: ObjectId;
+  title: string;
+  completed: boolean;
+  priority: Priority;
+  dueDate?: string | null;
+}
+
+export interface DependencyGraphNode {
+  task: TaskPopulated;
+  depth: number;
+}
+
+export interface DependencyGraph {
+  task: TaskPopulated;
+  upstream: DependencyGraphNode[]; // Tasks this task depends on (dependencies)
+  downstream: DependencyGraphNode[]; // Tasks that depend on this task (dependents)
+  isBlocked: boolean;
+}
+
+export interface ImpactAnalysis {
+  task: {
+    _id: ObjectId;
+    title: string;
+    completed: boolean;
+  };
+  direct: number;
+  indirect: number;
+  total: number;
+  impactedTasks: Array<{
+    _id: ObjectId;
+    title: string;
+    completed: boolean;
+    priority: Priority;
+    dueDate?: string | null;
+    list: Pick<List, "_id" | "name" | "color">;
+    project?: Pick<Project, "_id" | "name" | "color"> | null;
+    isDirect: boolean;
+  }>;
 }
 
 // ============================================
@@ -300,6 +344,7 @@ export interface CreateTaskRequest {
   subtasks?: Omit<Subtask, "_id" | "completed" | "completedAt" | "position">[];
   isRecurring?: boolean;
   recurringPattern?: RecurringPattern;
+  dependencies?: ObjectId[]; // Tasks this task depends on
 }
 
 export interface UpdateTaskRequest {
@@ -318,6 +363,7 @@ export interface UpdateTaskRequest {
   position?: number;
   isRecurring?: boolean;
   recurringPattern?: RecurringPattern | null;
+  dependencies?: ObjectId[]; // Tasks this task depends on
 }
 
 export interface CreateSubtaskRequest {

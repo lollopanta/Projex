@@ -17,7 +17,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SkeletonTaskCard } from "@/components/ui/skeleton";
 import { useList, useDeleteList } from "@/hooks/useLists";
 import { useTasks } from "@/hooks/useTasks";
 import { useUIStore } from "@/store";
@@ -32,7 +31,8 @@ export const ListDetailPage: React.FC = () => {
 
   const tasks = tasksData?.tasks || [];
 
-  const handleDelete = () => {
+  // Delete handler available for future use
+  const _handleDelete = () => {
     if (!id) return;
     if (window.confirm("Are you sure you want to delete this list? This will also delete all tasks in this list. This action cannot be undone.")) {
       deleteList.mutate(id, {

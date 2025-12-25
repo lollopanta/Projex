@@ -1,11 +1,13 @@
 const express = require('express');
 const router = express.Router();
-const { body, validationResult, query } = require('express-validator');
+const { body, validationResult } = require('express-validator');
+const mongoose = require('mongoose');
 const Task = require('../models/Task');
 const List = require('../models/List');
 const Project = require('../models/Project');
 const { authenticate } = require('../middleware/auth');
-const { checkListAccess, checkProjectAccess, canEdit, canView } = require('../middleware/rbac');
+const { checkListAccess, canEdit } = require('../middleware/rbac');
+const dependencyService = require('../services/dependencyService');
 
 // @route   GET /api/tasks
 // @desc    Get all tasks with filtering
@@ -89,6 +91,7 @@ router.get('/', authenticate, async (req, res) => {
       .populate('createdBy', 'username email firstName lastName')
       .populate('assignedTo', 'username email firstName lastName')
       .populate('labels', 'name color')
+      .populate('dependencies', 'title completed priority dueDate')
       .sort(sortOptions)
       .skip(skip)
       .limit(parseInt(limit));
@@ -121,13 +124,21 @@ router.get('/:id', authenticate, async (req, res) => {
       .populate('createdBy', 'username email firstName lastName')
       .populate('assignedTo', 'username email firstName lastName')
       .populate('labels', 'name color')
-      .populate('parentTask', 'title');
+      .populate('parentTask', 'title')
+      .populate('dependencies', 'title completed priority dueDate');
 
     if (!task) {
       return res.status(404).json({ message: 'Task not found' });
     }
 
-    res.json(task);
+    // Compute blocked status
+    const isBlocked = await dependencyService.isTaskBlocked(task);
+
+    // Convert to plain object and add computed field
+    const taskObj = task.toObject();
+    taskObj.isBlocked = isBlocked;
+
+    res.json(taskObj);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
@@ -158,7 +169,8 @@ router.post('/', authenticate, [
       reminders,
       subtasks,
       isRecurring,
-      recurringPattern
+      recurringPattern,
+      dependencies
     } = req.body;
 
     // Verify list exists
@@ -232,6 +244,14 @@ router.post('/', authenticate, [
       }
     }
 
+    // Validate dependencies if provided
+    if (dependencies && Array.isArray(dependencies) && dependencies.length > 0) {
+      const validation = await dependencyService.validateDependencies(null, dependencies);
+      if (!validation.valid) {
+        return res.status(400).json({ message: validation.error });
+      }
+    }
+
     const task = new Task({
       title,
       description,
@@ -245,7 +265,8 @@ router.post('/', authenticate, [
       reminders: reminders || [],
       subtasks: subtasks || [],
       isRecurring: isRecurring || false,
-      recurringPattern: recurringPattern || null
+      recurringPattern: recurringPattern || null,
+      dependencies: dependencies || []
     });
 
     await task.save();
@@ -255,7 +276,8 @@ router.post('/', authenticate, [
       .populate('project', 'name color')
       .populate('createdBy', 'username email firstName lastName')
       .populate('assignedTo', 'username email firstName lastName')
-      .populate('labels', 'name color');
+      .populate('labels', 'name color')
+      .populate('dependencies', 'title completed priority dueDate');
 
     res.status(201).json(populatedTask);
   } catch (error) {
@@ -331,20 +353,57 @@ router.put('/:id', authenticate, checkListAccess, canEdit, async (req, res) => {
       }
     }
 
+    // Validate dependencies if being updated
+    if (updates.dependencies !== undefined && Array.isArray(updates.dependencies)) {
+      const validation = await dependencyService.validateDependencies(req.params.id, updates.dependencies);
+      if (!validation.valid) {
+        return res.status(400).json({ message: validation.error });
+      }
+    }
+
+    const wasCompleted = task.completed;
+    const willBeCompleted = updates.completed === true;
+
+    // Validate and sanitize updates
     Object.keys(updates).forEach(key => {
       if (key !== '_id' && key !== 'createdAt' && key !== 'updatedAt') {
-        task[key] = updates[key];
+        // Special handling for kanbanColumnId - must be a valid ObjectId or null
+        if (key === 'kanbanColumnId') {
+          const value = updates[key];
+          // If it's a default column string ("todo", "in-progress", "done"), set to null
+          if (value === 'todo' || value === 'in-progress' || value === 'done' || value === '') {
+            task[key] = null;
+          } else if (value === null || value === undefined) {
+            task[key] = null;
+          } else {
+            // Try to validate it's a valid ObjectId
+            if (mongoose.Types.ObjectId.isValid(value)) {
+              task[key] = value;
+            } else {
+              // Invalid ObjectId, set to null
+              task[key] = null;
+            }
+          }
+        } else {
+          task[key] = updates[key];
+        }
       }
     });
 
     await task.save();
+
+    // If task was just completed, unblock dependent tasks
+    if (!wasCompleted && willBeCompleted) {
+      await dependencyService.unblockDependentTasks(task._id.toString());
+    }
 
     const updatedTask = await Task.findById(task._id)
       .populate('list', 'name color')
       .populate('project', 'name color')
       .populate('createdBy', 'username email firstName lastName')
       .populate('assignedTo', 'username email firstName lastName')
-      .populate('labels', 'name color');
+      .populate('labels', 'name color')
+      .populate('dependencies', 'title completed priority dueDate');
 
     res.json(updatedTask);
   } catch (error) {
@@ -380,6 +439,7 @@ router.patch('/:id/complete', authenticate, async (req, res) => {
       return res.status(404).json({ message: 'Task not found' });
     }
 
+    const wasCompleted = task.completed;
     task.completed = !task.completed;
     if (task.completed) {
       task.completedAt = new Date();
@@ -388,6 +448,11 @@ router.patch('/:id/complete', authenticate, async (req, res) => {
     }
 
     await task.save();
+
+    // If task was just completed, unblock dependent tasks
+    if (!wasCompleted && task.completed) {
+      await dependencyService.unblockDependentTasks(task._id.toString());
+    }
 
     res.json(task);
   } catch (error) {
@@ -425,6 +490,166 @@ router.post('/:id/subtasks', authenticate, [
 
     res.json(task);
   } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// ============================================
+// DEPENDENCY ROUTES
+// ============================================
+
+// @route   GET /api/tasks/:id/dependencies
+// @desc    Get dependency graph for a task
+// @access  Private
+router.get('/:id/dependencies', authenticate, async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id);
+    if (!task) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+
+    const graph = await dependencyService.getDependencyGraph(req.params.id, 5);
+    const isBlocked = await dependencyService.isTaskBlocked(task);
+
+    res.json({
+      task: graph.task,
+      upstream: graph.upstream.map(item => ({
+        task: item.task,
+        depth: item.depth
+      })),
+      downstream: graph.downstream.map(item => ({
+        task: item.task,
+        depth: item.depth
+      })),
+      isBlocked
+    });
+  } catch (error) {
+    console.error('Get dependencies error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   POST /api/tasks/:id/dependencies
+// @desc    Add dependencies to a task
+// @access  Private
+router.post('/:id/dependencies', authenticate, checkListAccess, canEdit, [
+  body('dependencies').isArray().withMessage('Dependencies must be an array'),
+  body('dependencies.*').isMongoId().withMessage('Each dependency must be a valid task ID')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const task = await Task.findById(req.params.id);
+    if (!task) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+
+    const { dependencies } = req.body;
+
+    // Merge with existing dependencies (avoid duplicates)
+    const existingDeps = task.dependencies.map(dep => dep.toString());
+    const newDeps = dependencies.map(dep => dep.toString());
+    const allDeps = [...new Set([...existingDeps, ...newDeps])];
+
+    // Validate
+    const validation = await dependencyService.validateDependencies(req.params.id, allDeps);
+    if (!validation.valid) {
+      return res.status(400).json({ message: validation.error });
+    }
+
+    task.dependencies = allDeps;
+    await task.save();
+
+    const populatedTask = await Task.findById(task._id)
+      .populate('dependencies', 'title completed priority dueDate')
+      .populate('list', 'name color')
+      .populate('project', 'name color')
+      .populate('assignedTo', 'username firstName lastName')
+      .populate('labels', 'name color');
+
+    res.json(populatedTask);
+  } catch (error) {
+    console.error('Add dependencies error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   DELETE /api/tasks/:id/dependencies/:dependencyId
+// @desc    Remove a dependency from a task
+// @access  Private
+router.delete('/:id/dependencies/:dependencyId', authenticate, checkListAccess, canEdit, async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id);
+    if (!task) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+
+    const dependencyId = req.params.dependencyId;
+    task.dependencies = task.dependencies.filter(
+      dep => dep.toString() !== dependencyId
+    );
+
+    await task.save();
+
+    const populatedTask = await Task.findById(task._id)
+      .populate('dependencies', 'title completed priority dueDate')
+      .populate('list', 'name color')
+      .populate('project', 'name color')
+      .populate('assignedTo', 'username firstName lastName')
+      .populate('labels', 'name color');
+
+    res.json(populatedTask);
+  } catch (error) {
+    console.error('Remove dependency error:', error);
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   GET /api/tasks/:id/impact
+// @desc    Get impact analysis for a task (what tasks are blocked by this one)
+// @access  Private
+router.get('/:id/impact', authenticate, async (req, res) => {
+  try {
+    const task = await Task.findById(req.params.id);
+    if (!task) {
+      return res.status(404).json({ message: 'Task not found' });
+    }
+
+    const impact = await dependencyService.getImpactedTasks(req.params.id);
+
+    // Get task details for impacted tasks
+    const impactedTasks = await Task.find({
+      _id: { $in: impact.all }
+    })
+      .populate('list', 'name color')
+      .populate('project', 'name color')
+      .select('title completed priority dueDate list project');
+
+    res.json({
+      task: {
+        _id: task._id,
+        title: task.title,
+        completed: task.completed
+      },
+      direct: impact.direct.length,
+      indirect: impact.indirect.length,
+      total: impact.all.length,
+      impactedTasks: impactedTasks.map(t => ({
+        _id: t._id,
+        title: t.title,
+        completed: t.completed,
+        priority: t.priority,
+        dueDate: t.dueDate,
+        list: t.list,
+        project: t.project,
+        isDirect: impact.direct.includes(t._id.toString())
+      }))
+    });
+  } catch (error) {
+    console.error('Get impact error:', error);
     res.status(500).json({ message: 'Server error', error: error.message });
   }
 });

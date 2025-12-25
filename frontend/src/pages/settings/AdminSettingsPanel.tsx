@@ -10,9 +10,7 @@ import { motion } from "framer-motion";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faEnvelope,
-  faShieldHalved,
   faPalette,
-  faUserPlus,
   faGauge,
   faWrench,
   faExclamationTriangle,
@@ -22,7 +20,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   Select,
@@ -32,20 +29,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useSiteSettings, useUpdateSiteSettings, useAdminStats } from "@/hooks";
-import { useAuthStore, useToast } from "@/store";
+import { useAuthStore } from "@/store";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { SiteSettings } from "@/types";
 
 export const AdminSettingsPanel: React.FC = () => {
   const { user } = useAuthStore();
-  const { toast } = useToast();
   const isAdmin = user?.role === "admin";
   
   const { data: settings, isLoading: settingsLoading, error: settingsError } = useSiteSettings({
     enabled: isAdmin,
   });
-  const { data: stats, isLoading: statsLoading } = useAdminStats({
+  const { data: stats } = useAdminStats({
     enabled: isAdmin,
   });
   const updateSettings = useUpdateSiteSettings();
@@ -98,7 +94,7 @@ export const AdminSettingsPanel: React.FC = () => {
       <Card>
         <CardContent className="pt-6">
           <p className="text-muted-foreground text-center">
-            You don't have permission to access admin settings.
+            You don&apos;t have permission to access admin settings.
           </p>
         </CardContent>
       </Card>

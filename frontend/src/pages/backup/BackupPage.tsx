@@ -18,7 +18,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/store";
 import { backupApi } from "@/api";
-import { cn } from "@/lib/utils";
 
 export const BackupPage: React.FC = () => {
   const { toast } = useToast();

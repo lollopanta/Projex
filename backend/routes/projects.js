@@ -353,6 +353,16 @@ router.post('/:id/columns', authenticate, checkProjectAccess, [
 
     const { name, color, position } = req.body;
 
+    // If no columns exist, initialize with default columns
+    if (project.kanbanColumns.length === 0) {
+      const defaultColumns = [
+        { name: 'To Do', color: '#6366F1', position: 0 },
+        { name: 'In Progress', color: '#F59E0B', position: 1 },
+        { name: 'Done', color: '#22C55E', position: 2 },
+      ];
+      project.kanbanColumns = defaultColumns;
+    }
+
     // Get max position if not provided
     const maxPosition = project.kanbanColumns.length > 0
       ? Math.max(...project.kanbanColumns.map(col => col.position))
@@ -365,11 +375,89 @@ router.post('/:id/columns', authenticate, checkProjectAccess, [
     };
 
     project.kanbanColumns.push(newColumn);
-    await project.save();
+    // Mark the kanbanColumns array as modified to ensure Mongoose saves the changes
+    project.markModified('kanbanColumns');
+    
+    // Use save with validation to ensure changes are persisted
+    await project.save({ validateBeforeSave: true });
 
-    // Get the newly created column (last one in array)
-    const createdColumn = project.kanbanColumns[project.kanbanColumns.length - 1];
+    // Reload project to get all columns sorted by position
+    const updatedProject = await Project.findById(req.params.id);
+    const allColumns = (updatedProject.kanbanColumns || []).sort((a, b) => a.position - b.position);
+    
+    // Return the newly created column
+    const createdColumn = allColumns[allColumns.length - 1];
     res.status(201).json(createdColumn);
+  } catch (error) {
+    res.status(500).json({ message: 'Server error', error: error.message });
+  }
+});
+
+// @route   PUT /api/projects/:id/columns/reorder
+// @desc    Reorder Kanban columns
+// @access  Private
+// NOTE: This route MUST come before /:id/columns/:columnId to avoid route conflicts
+router.put('/:id/columns/reorder', authenticate, checkProjectAccess, [
+  body('columnIds').isArray().withMessage('Column IDs array is required'),
+  body('columnIds.*').isMongoId().withMessage('Each column ID must be valid')
+], async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({ errors: errors.array() });
+    }
+
+    const project = await Project.findById(req.params.id);
+    if (!project) {
+      return res.status(404).json({ message: 'Project not found' });
+    }
+
+    // Only admin can reorder columns
+    if (req.projectAccess !== 'admin' && project.owner.toString() !== req.user._id.toString()) {
+      return res.status(403).json({ message: 'Only project admin can reorder columns' });
+    }
+
+    const { columnIds } = req.body;
+
+    // Validate all column IDs exist
+    const existingColumnIds = project.kanbanColumns.map(col => col._id.toString());
+    const invalidIds = columnIds.filter(id => !existingColumnIds.includes(id));
+    if (invalidIds.length > 0) {
+      return res.status(400).json({ message: `Invalid column IDs: ${invalidIds.join(', ')}` });
+    }
+
+    // Update positions directly on subdocuments
+    columnIds.forEach((columnId, index) => {
+      const column = project.kanbanColumns.id(columnId);
+      if (column) {
+        column.position = index;
+        // Force mark this subdocument as modified
+        column.isNew = false;
+        column.markModified('position');
+      }
+    });
+
+    // Mark the array as modified - this is crucial for Mongoose to detect changes
+    project.markModified('kanbanColumns');
+    
+    // Save with explicit validation and error handling
+    try {
+      await project.save({ validateBeforeSave: true });
+      console.log('Project saved successfully, columns:', project.kanbanColumns.map(c => ({ name: c.name, position: c.position })));
+    } catch (saveError) {
+      console.error('Error saving project:', saveError);
+      throw saveError;
+    }
+    
+    // Reload to get fresh data from database to verify persistence
+    const savedProject = await Project.findById(req.params.id);
+    if (!savedProject) {
+      return res.status(404).json({ message: 'Project not found after save' });
+    }
+    
+    const columns = (savedProject.kanbanColumns || []).sort((a, b) => a.position - b.position);
+    console.log('Returning columns after reload:', columns.map(c => ({ name: c.name, position: c.position })));
+    res.json(columns);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }
@@ -402,17 +490,44 @@ router.put('/:id/columns/:columnId', authenticate, checkProjectAccess, [
     const { columnId } = req.params;
     const { name, color, position } = req.body;
 
+    // Verify column exists
     const column = project.kanbanColumns.id(columnId);
     if (!column) {
       return res.status(404).json({ message: 'Column not found' });
     }
 
-    if (name !== undefined) column.name = name;
-    if (color !== undefined) column.color = color;
-    if (position !== undefined) column.position = position;
+    // Update column properties
+    if (name !== undefined) {
+      column.name = name;
+      column.markModified('name');
+    }
+    if (color !== undefined) {
+      column.color = color;
+      column.markModified('color');
+    }
+    if (position !== undefined) {
+      column.position = position;
+      column.markModified('position');
+    }
 
-    await project.save();
-    res.json(column);
+    // Mark the entire array as modified and save
+    project.markModified('kanbanColumns');
+    
+    try {
+      await project.save({ validateBeforeSave: true });
+      console.log('Column updated successfully:', { name: column.name, color: column.color, position: column.position });
+    } catch (saveError) {
+      console.error('Error saving column update:', saveError);
+      throw saveError;
+    }
+    
+    // Reload to get fresh data
+    const savedProject = await Project.findById(req.params.id);
+    if (!savedProject) {
+      return res.status(404).json({ message: 'Project not found after save' });
+    }
+    const updatedColumn = savedProject.kanbanColumns.id(columnId);
+    res.json(updatedColumn);
   } catch (error) {
     res.status(500).json({ message: 'Server error', error: error.message });
   }

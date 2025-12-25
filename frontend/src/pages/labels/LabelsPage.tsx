@@ -11,13 +11,12 @@ import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faTag, faPlus, faXmark } from "@fortawesome/free-solid-svg-icons";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
 import { SkeletonTaskCard } from "@/components/ui/skeleton";
 import { useLabels, useDeleteLabel } from "@/hooks/useLabels";
 import { useTasks } from "@/hooks/useTasks";
-import { useUIStore, useToast } from "@/store";
+import { useUIStore } from "@/store";
 import { TaskList } from "@/components/tasks/TaskList";
 import { cn } from "@/lib/utils";
 import type { Label } from "@/types";
@@ -26,7 +25,6 @@ export const LabelsPage: React.FC = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const selectedLabelId = searchParams.get("id");
   const { openModal } = useUIStore();
-  const { toast } = useToast();
   const { data: labels, isLoading: labelsLoading } = useLabels();
   const deleteLabel = useDeleteLabel();
 

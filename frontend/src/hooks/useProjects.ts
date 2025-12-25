@@ -226,12 +226,8 @@ export const useCreateKanbanColumn = () => {
     mutationFn: ({ projectId, data }: { projectId: string; data: CreateKanbanColumnRequest }) =>
       projectsApi.createKanbanColumn(projectId, data),
     onSuccess: (newColumn, variables) => {
-      // Update the columns cache
-      queryClient.setQueryData<KanbanColumn[]>(kanbanColumnKeys.project(variables.projectId), (old) => {
-        const updated = old ? [...old, newColumn] : [newColumn];
-        return updated.sort((a, b) => a.position - b.position);
-      });
-      // Invalidate project to refresh kanbanColumns
+      // Invalidate to refetch all columns (including defaults if they were just created)
+      queryClient.invalidateQueries({ queryKey: kanbanColumnKeys.project(variables.projectId) });
       queryClient.invalidateQueries({ queryKey: projectKeys.detail(variables.projectId) });
       toast.success("Column created", `"${newColumn.name}" has been added`);
     },
@@ -295,6 +291,32 @@ export const useDeleteKanbanColumn = () => {
     },
     onError: (error: Error) => {
       toast.error("Failed to delete column", error.message);
+    },
+  });
+};
+
+/**
+ * Hook to reorder Kanban columns
+ */
+export const useReorderKanbanColumns = () => {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: ({ projectId, columnIds }: { projectId: string; columnIds: string[] }) =>
+      projectsApi.reorderKanbanColumns(projectId, columnIds),
+    onSuccess: (reorderedColumns, variables) => {
+      // Update the columns cache with new order (positions are already updated from backend)
+      queryClient.setQueryData<KanbanColumn[]>(
+        kanbanColumnKeys.project(variables.projectId),
+        reorderedColumns
+      );
+      // Invalidate project to ensure consistency
+      queryClient.invalidateQueries({ queryKey: projectKeys.detail(variables.projectId) });
+      toast.success("Columns reordered", "Column order has been updated");
+    },
+    onError: (error: Error) => {
+      toast.error("Failed to reorder columns", error.message);
     },
   });
 };

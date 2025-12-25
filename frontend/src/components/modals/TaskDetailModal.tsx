@@ -9,7 +9,6 @@ import React, { useState } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { motion } from "framer-motion";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faCheck,
@@ -21,7 +20,6 @@ import {
   faFolderOpen,
   faTrash,
   faEdit,
-  faXmark,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   Dialog,
@@ -43,8 +41,10 @@ import {
 import { Badge, PriorityBadge } from "@/components/ui/badge";
 import { UserAvatar } from "@/components/ui/avatar";
 import { useTask, useUpdateTask, useDeleteTask, useToggleTaskComplete } from "@/hooks/useTasks";
-import { useUIStore, useToast } from "@/store";
+import { useUIStore } from "@/store";
 import { cn, isOverdue } from "@/lib/utils";
+import { TaskDependencyGraph } from "@/components/tasks/TaskDependencyGraph";
+import { TaskDependencySelector } from "@/components/tasks/TaskDependencySelector";
 import type { TaskPopulated, Priority } from "@/types";
 import dayjs from "dayjs";
 import relativeTime from "dayjs/plugin/relativeTime";
@@ -57,13 +57,13 @@ const updateTaskSchema = z.object({
   description: z.string().max(1000).optional(),
   priority: z.enum(["low", "medium", "high"]).optional(),
   dueDate: z.string().optional(),
+  dependencies: z.array(z.string()).optional(),
 });
 
 type UpdateTaskFormData = z.infer<typeof updateTaskSchema>;
 
 export const TaskDetailModal: React.FC = () => {
   const { modal, closeModal } = useUIStore();
-  const { toast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
 
   const isOpen = modal.isOpen && modal.type === "taskDetail";
@@ -83,19 +83,61 @@ export const TaskDetailModal: React.FC = () => {
     register,
     handleSubmit,
     control,
-    formState: { errors },
     reset,
+    watch,
+    setValue,
   } = useForm<UpdateTaskFormData>({
     resolver: zodResolver(updateTaskSchema),
     defaultValues: {
-      title: displayTask?.title || "",
-      description: displayTask?.description || "",
-      priority: displayTask?.priority || "medium",
-      dueDate: displayTask?.dueDate
-        ? dayjs(displayTask.dueDate).format("YYYY-MM-DDTHH:mm")
-        : "",
+      title: "",
+      description: "",
+      priority: "medium",
+      dueDate: "",
+      dependencies: [],
     },
   });
+
+  // Reset form with task data when task loads or when entering edit mode
+  React.useEffect(() => {
+    if (displayTask) {
+      const dependencies = displayTask.dependencies
+        ? displayTask.dependencies.map((dep) =>
+            typeof dep === "object" ? dep._id : dep
+          )
+        : [];
+      
+      reset({
+        title: displayTask.title || "",
+        description: displayTask.description || "",
+        priority: displayTask.priority || "medium",
+        dueDate: displayTask.dueDate
+          ? dayjs(displayTask.dueDate).format("YYYY-MM-DDTHH:mm")
+          : "",
+        dependencies,
+      });
+    }
+  }, [displayTask, reset]);
+
+  // Reset form with current task data when entering edit mode
+  React.useEffect(() => {
+    if (isEditing && displayTask) {
+      const dependencies = displayTask.dependencies
+        ? displayTask.dependencies.map((dep) =>
+            typeof dep === "object" ? dep._id : dep
+          )
+        : [];
+      
+      reset({
+        title: displayTask.title || "",
+        description: displayTask.description || "",
+        priority: displayTask.priority || "medium",
+        dueDate: displayTask.dueDate
+          ? dayjs(displayTask.dueDate).format("YYYY-MM-DDTHH:mm")
+          : "",
+        dependencies,
+      });
+    }
+  }, [isEditing, displayTask, reset]);
 
   const onSubmit = (data: UpdateTaskFormData) => {
     if (!taskId) return;
@@ -106,6 +148,20 @@ export const TaskDetailModal: React.FC = () => {
     if (data.priority !== displayTask?.priority) updateData.priority = data.priority;
     if (data.dueDate !== (displayTask?.dueDate ? dayjs(displayTask.dueDate).format("YYYY-MM-DDTHH:mm") : "")) {
       updateData.dueDate = data.dueDate;
+    }
+
+    // Check if dependencies changed
+    const currentDeps = displayTask?.dependencies
+      ? displayTask.dependencies.map((dep) => (typeof dep === "object" ? dep._id : dep))
+      : [];
+    const newDeps = data.dependencies || [];
+    const depsChanged =
+      currentDeps.length !== newDeps.length ||
+      currentDeps.some((dep) => !newDeps.includes(dep)) ||
+      newDeps.some((dep) => !currentDeps.includes(dep));
+
+    if (depsChanged) {
+      updateData.dependencies = newDeps;
     }
 
     if (Object.keys(updateData).length === 0) {
@@ -138,7 +194,12 @@ export const TaskDetailModal: React.FC = () => {
   React.useEffect(() => {
     if (!isOpen) {
       setIsEditing(false);
-      reset();
+      reset({
+        title: "",
+        description: "",
+        priority: "medium",
+        dueDate: "",
+      });
     }
   }, [isOpen, reset]);
 
@@ -158,13 +219,17 @@ export const TaskDetailModal: React.FC = () => {
           <DialogHeader>
             <DialogTitle>Task not found</DialogTitle>
             <DialogDescription>
-              The task you're looking for doesn't exist.
+              The task you&apos;re looking for doesn&apos;t exist.
             </DialogDescription>
           </DialogHeader>
           <Button onClick={closeModal}>Close</Button>
         </DialogContent>
       </Dialog>
     );
+  }
+
+  if (!displayTask) {
+    return null;
   }
 
   const overdue = displayTask.dueDate && isOverdue(displayTask.dueDate) && !displayTask.completed;
@@ -229,6 +294,22 @@ export const TaskDetailModal: React.FC = () => {
               <Label>Due Date</Label>
               <Input type="datetime-local" {...register("dueDate")} />
             </div>
+            {taskId && (
+              <div className="space-y-2">
+                <TaskDependencySelector
+                  taskId={taskId}
+                  projectId={
+                    displayTask.project
+                      ? typeof displayTask.project === "object"
+                        ? displayTask.project._id
+                        : displayTask.project
+                      : undefined
+                  }
+                  currentDependencies={watch("dependencies") || []}
+                  onDependenciesChange={(deps) => setValue("dependencies", deps)}
+                />
+              </div>
+            )}
             <div className="flex gap-2 justify-end">
               <Button type="button" variant="outline" onClick={() => setIsEditing(false)}>
                 Cancel
@@ -414,6 +495,14 @@ export const TaskDetailModal: React.FC = () => {
                     </div>
                   ))}
                 </div>
+              </div>
+            )}
+
+            {/* Dependencies */}
+            {taskId && (
+              <div className="space-y-2">
+                <div className="text-sm font-medium">Dependencies</div>
+                <TaskDependencyGraph taskId={taskId} />
               </div>
             )}
           </div>

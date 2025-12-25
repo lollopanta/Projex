@@ -248,7 +248,6 @@ MIT License - see LICENSE file for details
 - [ ] Advanced recurring task patterns
 - [ ] Task templates
 - [ ] Time tracking
-- [ ] Gantt charts
 
 ## Support
 

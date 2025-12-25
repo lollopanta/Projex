@@ -5,20 +5,17 @@
  * ============================================
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useEffect } from "react";
 import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faPlus,
   faCalendar,
-  faTag,
   faUser,
   faFlag,
-  faList,
-  faFolderOpen,
 } from "@fortawesome/free-solid-svg-icons";
 import {
   Dialog,
@@ -38,12 +35,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Checkbox } from "@/components/ui/checkbox";
 import { useCreateTask } from "@/hooks/useTasks";
 import { useLists } from "@/hooks/useLists";
 import { useProjects } from "@/hooks/useProjects";
 import { useLabels } from "@/hooks/useLabels";
-import { useSearchUsers } from "@/hooks/useUsers";
 import { useUIStore, useToast } from "@/store";
 import { cn } from "@/lib/utils";
 import type { Priority, ObjectId } from "@/types";
@@ -74,11 +69,9 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   const { modal, closeModal } = useUIStore();
   const { toast } = useToast();
   const createTask = useCreateTask();
-  const { data: lists } = useLists();
+  const { data: lists, isLoading: listsLoading } = useLists();
   const { data: projects } = useProjects();
   const { data: labels } = useLabels();
-  const [userSearchQuery, setUserSearchQuery] = useState("");
-  const { data: searchResults } = useSearchUsers(userSearchQuery);
 
   const isOpen = modal.isOpen && modal.type === "task";
 
@@ -113,10 +106,17 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
   const selectedProject = watch("project");
 
   // Filter lists by selected project
+  // If no project selected: show all lists
+  // If project selected: show lists in that project OR lists without a project
   const availableLists = lists?.filter((list) => {
-    if (!selectedProject) return !list.project;
-    if (typeof list.project === "string") return list.project === selectedProject;
-    return list.project?._id === selectedProject;
+    if (!selectedProject || selectedProject === "__none__" || selectedProject === "") {
+      // Show all lists when no project is selected
+      return true;
+    }
+    
+    // If project is selected, show lists that belong to that project OR have no project
+    const listProjectId = typeof list.project === "string" ? list.project : list.project?._id;
+    return listProjectId === selectedProject || !listProjectId;
   }) || [];
 
   // Update project when list changes
@@ -125,12 +125,26 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
       const list = lists?.find((l) => l._id === selectedList);
       if (list?.project) {
         const projectId = typeof list.project === "string" ? list.project : list.project._id;
-        if (projectId !== selectedProject) {
+        if (projectId !== selectedProject && projectId) {
           setValue("project", projectId);
         }
       }
     }
   }, [selectedList, lists, selectedProject, setValue]);
+
+  // Reset list selection if it becomes invalid when project changes
+  useEffect(() => {
+    if (selectedList && availableLists.length > 0) {
+      const isListValid = availableLists.some((list) => list._id === selectedList);
+      if (!isListValid) {
+        // Current list is not available for selected project, reset it
+        setValue("list", "");
+      }
+    } else if (selectedList && availableLists.length === 0 && !listsLoading) {
+      // No lists available for selected project, reset selection
+      setValue("list", "");
+    }
+  }, [selectedProject, availableLists, selectedList, setValue, listsLoading]);
 
   const onSubmit = (data: TaskFormData) => {
     createTask.mutate(
@@ -258,7 +272,11 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                     </SelectValue>
                   </SelectTrigger>
                   <SelectContent>
-                    {availableLists.length > 0 ? (
+                    {listsLoading ? (
+                      <div className="px-2 py-1.5 text-sm text-muted-foreground">
+                        Loading lists...
+                      </div>
+                    ) : availableLists.length > 0 ? (
                       availableLists.map((list) => (
                         <SelectItem key={list._id} value={list._id}>
                           <div className="flex items-center gap-2">
@@ -266,13 +284,22 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
                               className="w-3 h-3 rounded"
                               style={{ backgroundColor: list.color }}
                             />
-                            {list.name}
+                            <span>{list.name}</span>
+                            {list.project && (
+                              <span className="text-xs text-muted-foreground">
+                                ({typeof list.project === "object" ? list.project.name : "Project"})
+                              </span>
+                            )}
                           </div>
                         </SelectItem>
                       ))
                     ) : (
                       <div className="px-2 py-1.5 text-sm text-muted-foreground">
-                        No lists available
+                        {lists && lists.length === 0
+                          ? "No lists found. Create a list first."
+                          : selectedProject
+                          ? "No lists available for this project"
+                          : "No lists available"}
                       </div>
                     )}
                   </SelectContent>

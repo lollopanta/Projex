@@ -5,6 +5,8 @@
  * ============================================
  */
 
+import type { TaskPopulated } from "@/types";
+
 export type FilterOperator = "=" | "!=" | ">" | ">=" | "<" | "<=" | "like" | "in" | "not in";
 export type LogicalOperator = "&&" | "||";
 
@@ -379,39 +381,42 @@ export function parseFilterQuery(
  */
 export function evaluateFilter(
   expression: FilterExpression | null,
-  task: any
+  task: TaskPopulated
 ): boolean {
   if (!expression) return true;
 
   if (expression.type === "condition" && expression.condition) {
     const { field, operator, value } = expression.condition;
-    let taskValue: any;
+    let taskValue: string | number | boolean | Date | string[] | null | undefined;
 
     // Map field names to task properties
     switch (field) {
       case "done":
         taskValue = task.completed;
         break;
-      case "priority":
+      case "priority": {
         const priorityMap = { low: 1, medium: 2, high: 3 };
         taskValue = priorityMap[task.priority as keyof typeof priorityMap] || 0;
         break;
+      }
       case "dueDate":
         taskValue = task.dueDate;
         break;
       case "doneAt":
         taskValue = task.completedAt;
         break;
-      case "assignees":
-        taskValue = task.assignedTo?.map((u: any) =>
+      case "assignees": {
+        taskValue = task.assignedTo?.map((u) =>
           typeof u === "string" ? u : u._id
         ) || [];
         break;
-      case "labels":
-        taskValue = task.labels?.map((l: any) =>
+      }
+      case "labels": {
+        taskValue = task.labels?.map((l) =>
           typeof l === "string" ? l : l._id
         ) || [];
         break;
+      }
       case "created":
         taskValue = task.createdAt;
         break;
@@ -419,7 +424,8 @@ export function evaluateFilter(
         taskValue = task.updatedAt;
         break;
       default:
-        taskValue = task[field];
+        // For unknown fields, try to access as a property
+        taskValue = (task as Record<string, unknown>)[field] as typeof taskValue;
     }
 
     // Evaluate operator
@@ -429,21 +435,21 @@ export function evaluateFilter(
       case "!=":
         return taskValue !== value;
       case ">":
-        return taskValue > value;
+        return taskValue != null && value != null && taskValue > value;
       case ">=":
-        return taskValue >= value;
+        return taskValue != null && value != null && taskValue >= value;
       case "<":
-        return taskValue < value;
+        return taskValue != null && value != null && taskValue < value;
       case "<=":
-        return taskValue <= value;
+        return taskValue != null && value != null && taskValue <= value;
       case "like":
-        return String(taskValue)
+        return taskValue != null && String(taskValue)
           .toLowerCase()
           .includes(String(value).toLowerCase());
       case "in":
-        return Array.isArray(value) && value.includes(taskValue);
+        return Array.isArray(value) && taskValue != null && value.includes(String(taskValue));
       case "not in":
-        return Array.isArray(value) && !value.includes(taskValue);
+        return Array.isArray(value) && taskValue != null && !value.includes(String(taskValue));
       default:
         return false;
     }

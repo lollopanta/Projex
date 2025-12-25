@@ -16,15 +16,11 @@ import { useTasks } from "@/hooks/useTasks";
 import { useUIStore } from "@/store";
 import { TaskList } from "@/components/tasks/TaskList";
 import dayjs from "dayjs";
-import { cn, isOverdue } from "@/lib/utils";
 import type { TaskPopulated } from "@/types";
 
 export const UpcomingPage: React.FC = () => {
   const { openModal } = useUIStore();
   const [daysAhead, setDaysAhead] = useState(7);
-
-  const startDate = dayjs().format("YYYY-MM-DD");
-  const endDate = dayjs().add(daysAhead, "days").format("YYYY-MM-DD");
 
   // Fetch upcoming tasks
   const { data, isLoading } = useTasks({

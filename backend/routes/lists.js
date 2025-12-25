@@ -4,7 +4,7 @@ const { body, validationResult } = require('express-validator');
 const List = require('../models/List');
 const Task = require('../models/Task');
 const { authenticate } = require('../middleware/auth');
-const { checkListAccess, checkProjectAccess, canEdit, canView } = require('../middleware/rbac');
+const { checkListAccess, canEdit, canView } = require('../middleware/rbac');
 
 // @route   GET /api/lists
 // @desc    Get all lists for user

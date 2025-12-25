@@ -9,7 +9,7 @@ import React, { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { useNavigate } from "react-router";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import { faFolderPlus, faXmark } from "@fortawesome/free-solid-svg-icons";
@@ -73,7 +73,8 @@ export const CreateProjectModal: React.FC = () => {
     },
   });
 
-  const watchedColor = watch("color", selectedColor);
+  // Watch color for form sync (not used but needed for form state)
+  watch("color");
 
   const onSubmit = (data: ProjectFormData) => {
     createProject.mutate(

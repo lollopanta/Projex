@@ -43,8 +43,6 @@ import {
   useVerify2FA,
   useDisable2FA,
   useSiteSettings,
-  useUpdateSiteSettings,
-  useAdminStats,
 } from "@/hooks";
 import { authApi } from "@/api";
 import { googleCalendarApi } from "@/api";
@@ -145,7 +143,7 @@ export const SettingsPage: React.FC = () => {
     try {
       const { authUrl } = await googleCalendarApi.getAuthUrl();
       window.location.href = authUrl;
-    } catch (error) {
+    } catch (_error) {
       toast.error("Failed to connect", "Could not initiate Google Calendar connection");
     }
   };
@@ -154,7 +152,7 @@ export const SettingsPage: React.FC = () => {
     try {
       await googleCalendarApi.disconnectGoogleCalendar();
       toast.success("Disconnected", "Google Calendar has been disconnected");
-    } catch (error) {
+    } catch (_error) {
       toast.error("Failed to disconnect", "Could not disconnect Google Calendar");
     }
   };
@@ -383,8 +381,8 @@ export const SettingsPage: React.FC = () => {
                                     toast.success("Email 2FA enabled", "Email-based 2FA has been activated");
                                     // Refresh user data
                                     window.location.reload();
-                                  } catch (error) {
-                                    toast.error("Failed to enable", (error as Error).message);
+                                  } catch (_error) {
+                                    toast.error("Failed to enable", (_error as Error).message);
                                   }
                                 }}
                               >

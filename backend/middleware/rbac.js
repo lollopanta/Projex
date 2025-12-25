@@ -40,8 +40,53 @@ const checkProjectAccess = async (req, res, next) => {
 // Check if user has access to a list
 const checkListAccess = async (req, res, next) => {
   try {
-    // Check for list ID in various places (routes use different param names)
-    const listId = req.params.listId || req.params.id || req.body.list;
+    let listId = null;
+
+    // For task routes (PUT/DELETE /api/tasks/:id), get list from the task
+    // Check if this might be a task route by seeing if req.params.id exists but req.body.list doesn't
+    if (req.params.id && !req.body.list && (req.method === 'PUT' || req.method === 'DELETE')) {
+      // Try to get the task and extract its list and project
+      const task = await Task.findById(req.params.id).populate('list').populate('project');
+      if (task) {
+        if (task.list) {
+          listId = typeof task.list === 'string' ? task.list : task.list._id.toString();
+        }
+        // Also set project access if task belongs to a project
+        if (task.project) {
+          const project = typeof task.project === 'string' 
+            ? await Project.findById(task.project)
+            : task.project;
+          if (project) {
+            if (project.owner.toString() === req.user._id.toString()) {
+              req.projectAccess = 'admin';
+            } else {
+              const member = project.members.find(
+                m => m.user.toString() === req.user._id.toString()
+              );
+              if (member) {
+                req.projectAccess = member.role;
+              }
+            }
+            req.project = project;
+          }
+        }
+        // If task has no list, skip list access check (task belongs to project only)
+        if (!listId) {
+          return next();
+        }
+      } else {
+        // Task not found, let the route handler deal with it
+        return next();
+      }
+    } else {
+      // For other routes, check for list ID in various places
+      listId = req.params.listId || req.body.list;
+      // Only use req.params.id if req.body.list is not provided (to avoid conflicts with task routes)
+      if (!listId && req.params.id && req.body.list === undefined) {
+        listId = req.params.id;
+      }
+    }
+
     if (!listId) return next();
 
     const list = await List.findById(listId);

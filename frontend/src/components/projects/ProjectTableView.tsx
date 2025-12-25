@@ -70,31 +70,36 @@ export const ProjectTableView: React.FC<ProjectTableViewProps> = ({
   const sortedTasks = React.useMemo(() => {
     const sorted = [...tasks];
     sorted.sort((a, b) => {
-      let aVal: any;
-      let bVal: any;
+      let aVal: string | number;
+      let bVal: string | number;
 
       switch (sortField) {
-        case "completed":
+        case "completed": {
           aVal = a.completed ? 1 : 0;
           bVal = b.completed ? 1 : 0;
           break;
-        case "title":
+        }
+        case "title": {
           aVal = a.title.toLowerCase();
           bVal = b.title.toLowerCase();
           break;
-        case "priority":
+        }
+        case "priority": {
           const priorityOrder = { low: 1, medium: 2, high: 3 };
           aVal = priorityOrder[a.priority];
           bVal = priorityOrder[b.priority];
           break;
-        case "dueDate":
+        }
+        case "dueDate": {
           aVal = a.dueDate ? new Date(a.dueDate).getTime() : Infinity;
           bVal = b.dueDate ? new Date(b.dueDate).getTime() : Infinity;
           break;
-        case "completedAt":
+        }
+        case "completedAt": {
           aVal = a.completedAt ? new Date(a.completedAt).getTime() : 0;
           bVal = b.completedAt ? new Date(b.completedAt).getTime() : 0;
           break;
+        }
         default:
           aVal = a.position;
           bVal = b.position;
