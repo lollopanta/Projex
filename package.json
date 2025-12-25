@@ -9,10 +9,18 @@
     "client": "cd frontend && npm run dev",
     "install-all": "npm install && cd backend && npm install && cd ../frontend && npm install"
   },
-  "keywords": ["projex", "mern"],
+  "keywords": [
+    "projex",
+    "mern"
+  ],
   "author": "",
   "license": "AGPL-3.0-or-later",
   "devDependencies": {
-    "concurrently": "^8.2.2"
+    "@eslint/js": "^9.39.2",
+    "concurrently": "^8.2.2",
+    "eslint": "^9.39.2",
+    "eslint-plugin-react": "^7.37.5",
+    "globals": "^16.5.0",
+    "typescript-eslint": "^8.50.1"
   }
 }

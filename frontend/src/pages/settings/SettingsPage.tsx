@@ -84,7 +84,11 @@ export const SettingsPage: React.FC = () => {
   const [verifyToken, setVerifyToken] = useState("");
   const [disablePassword, setDisablePassword] = useState("");
   const [showDisable2FADialog, setShowDisable2FADialog] = useState(false);
-  const { data: siteSettings } = useSiteSettings();
+  
+  // Only fetch site settings if user is admin
+  const { data: siteSettings } = useSiteSettings({
+    enabled: user?.role === "admin",
+  });
 
   // Mutations
   const updateProfileMutation = useUpdateProfile();

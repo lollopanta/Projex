@@ -257,3 +257,6 @@ For issues and questions, please open an issue on GitHub.
 ## Acknowledgments
 
 Inspired by Vikunja and other modern task management applications.
+
+
+ To resume this session: cursor-agent --resume=cdc62758-7cc5-487d-9a31-00343d18033e

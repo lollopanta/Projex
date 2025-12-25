@@ -44,6 +44,10 @@ const taskSchema = new mongoose.Schema({
     ref: 'Project',
     default: null
   },
+  kanbanColumnId: {
+    type: mongoose.Schema.Types.ObjectId,
+    default: null
+  },
   createdBy: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'User',

@@ -12,6 +12,9 @@ import type {
   UpdateProjectRequest,
   AddProjectMemberRequest,
   MessageResponse,
+  KanbanColumn,
+  CreateKanbanColumnRequest,
+  UpdateKanbanColumnRequest,
 } from "@/types";
 
 /**
@@ -69,6 +72,18 @@ export const addProjectMember = async (
 };
 
 /**
+ * Update a member's role in project
+ */
+export const updateProjectMemberRole = async (
+  projectId: string,
+  memberId: string,
+  role: "viewer" | "editor" | "admin"
+): ApiResponse<Project> => {
+  const response = await apiClient.put<Project>(`/projects/${projectId}/members/${memberId}`, { role });
+  return response.data;
+};
+
+/**
  * Remove a member from project
  */
 export const removeProjectMember = async (
@@ -77,4 +92,62 @@ export const removeProjectMember = async (
 ): ApiResponse<Project> => {
   const response = await apiClient.delete<Project>(`/projects/${projectId}/members/${memberId}`);
   return response.data;
+};
+
+/**
+ * Get all Kanban columns for a project
+ */
+export const getKanbanColumns = async (projectId: string): ApiResponse<KanbanColumn[]> => {
+  const response = await apiClient.get<KanbanColumn[]>(`/projects/${projectId}/columns`);
+  return response.data;
+};
+
+/**
+ * Create a new Kanban column
+ */
+export const createKanbanColumn = async (
+  projectId: string,
+  data: CreateKanbanColumnRequest
+): ApiResponse<KanbanColumn> => {
+  const response = await apiClient.post<KanbanColumn>(`/projects/${projectId}/columns`, data);
+  return response.data;
+};
+
+/**
+ * Update a Kanban column
+ */
+export const updateKanbanColumn = async (
+  projectId: string,
+  columnId: string,
+  data: UpdateKanbanColumnRequest
+): ApiResponse<KanbanColumn> => {
+  const response = await apiClient.put<KanbanColumn>(`/projects/${projectId}/columns/${columnId}`, data);
+  return response.data;
+};
+
+/**
+ * Delete a Kanban column
+ */
+export const deleteKanbanColumn = async (
+  projectId: string,
+  columnId: string
+): ApiResponse<MessageResponse> => {
+  const response = await apiClient.delete<MessageResponse>(`/projects/${projectId}/columns/${columnId}`);
+  return response.data;
+};
+
+// Export all functions as an object for convenience (must be after all function declarations)
+export const projectsApi = {
+  getProjects,
+  getProjectById,
+  createProject,
+  updateProject,
+  deleteProject,
+  addProjectMember,
+  updateProjectMemberRole,
+  removeProjectMember,
+  getKanbanColumns,
+  createKanbanColumn,
+  updateKanbanColumn,
+  deleteKanbanColumn,
 };

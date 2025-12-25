@@ -68,6 +68,14 @@ export interface ProjectMember {
   addedAt: string;
 }
 
+export interface KanbanColumn {
+  _id: ObjectId;
+  name: string;
+  color: string;
+  position: number;
+  createdAt: string;
+}
+
 export interface Project extends Timestamps {
   _id: ObjectId;
   name: string;
@@ -75,6 +83,7 @@ export interface Project extends Timestamps {
   owner: UserPublic | ObjectId;
   members: ProjectMember[];
   color: string;
+  kanbanColumns?: KanbanColumn[];
   isArchived: boolean;
 }
 
@@ -160,6 +169,7 @@ export interface Task extends Timestamps {
   description?: string;
   list: List | ObjectId;
   project?: Project | ObjectId | null;
+  kanbanColumnId?: ObjectId | null;
   createdBy: UserPublic | ObjectId;
   assignedTo: (UserPublic | ObjectId)[];
   priority: Priority;
@@ -297,6 +307,7 @@ export interface UpdateTaskRequest {
   description?: string;
   list?: ObjectId;
   project?: ObjectId;
+  kanbanColumnId?: ObjectId | null;
   assignedTo?: ObjectId[];
   priority?: Priority;
   labels?: ObjectId[];
@@ -488,6 +499,19 @@ export interface AdminStats {
     admins: number;
     with2FA: number;
   };
+}
+
+// Kanban Columns
+export interface CreateKanbanColumnRequest {
+  name: string;
+  color?: string;
+  position?: number;
+}
+
+export interface UpdateKanbanColumnRequest {
+  name?: string;
+  color?: string;
+  position?: number;
 }
 
 export interface UpdateSiteSettingsRequest {

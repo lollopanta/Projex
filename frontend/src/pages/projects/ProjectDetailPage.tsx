@@ -5,7 +5,7 @@
  * ============================================
  */
 
-import React from "react";
+import React, { useState } from "react";
 import { useParams, Link } from "react-router";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
@@ -13,42 +13,44 @@ import {
   faPlus,
   faListCheck,
   faChevronLeft,
+  faFilter,
 } from "@fortawesome/free-solid-svg-icons";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { EmptyState } from "@/components/common/EmptyState";
 import { Skeleton } from "@/components/ui/skeleton";
-import { SkeletonTaskCard } from "@/components/ui/skeleton";
-import { useProject, useDeleteProject } from "@/hooks/useProjects";
+import { useProject } from "@/hooks/useProjects";
 import { useLists } from "@/hooks/useLists";
 import { useTasks } from "@/hooks/useTasks";
+import { useProjectPermissions } from "@/hooks/useProjectPermissions";
 import { useUIStore } from "@/store";
 import { TaskList } from "@/components/tasks/TaskList";
-// ConfirmDialog not needed - using native confirm for now
-import { cn } from "@/lib/utils";
-import type { List } from "@/types";
+import { ProjectViewSwitcher, type ProjectViewType } from "@/components/projects/ProjectViewSwitcher";
+import { ProjectListView } from "@/components/projects/ProjectListView";
+import { ProjectTableView } from "@/components/projects/ProjectTableView";
+import { ProjectKanbanView } from "@/components/projects/ProjectKanbanView";
+import { ProjectGanttView } from "@/components/projects/ProjectGanttView";
+import { TaskFilterInput } from "@/components/projects/TaskFilterInput";
+import { KanbanColumnManager } from "@/components/projects/KanbanColumnManager";
+import { parseFilterQuery, evaluateFilter } from "@/lib/queryParser";
+import type { List, TaskPopulated } from "@/types";
 
 export const ProjectDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const { openModal } = useUIStore();
   const { data: project, isLoading, error, isError } = useProject(id || "");
-  const { data: lists } = useLists({ projectId: id });
+  const { data: lists, isLoading: listsLoading } = useLists({ projectId: id });
   const { data: tasksData } = useTasks({ projectId: id, limit: 100 });
-  const deleteProject = useDeleteProject();
+  const permissions = useProjectPermissions(id || "");
+
+  const [currentView, setCurrentView] = useState<ProjectViewType>("list");
+  const [filterQuery, setFilterQuery] = useState("");
 
   const tasks = tasksData?.tasks || [];
   const projectLists = lists || [];
-
-  const handleDelete = () => {
-    if (!id) return;
-    if (window.confirm("Are you sure you want to delete this project? This will also delete all tasks and lists in this project. This action cannot be undone.")) {
-      deleteProject.mutate(id, {
-        onSuccess: () => {
-          window.location.href = "/projects";
-        },
-      });
-    }
-  };
+  
+  // Get first list ID for default task creation
+  const defaultListId = projectLists.length > 0 ? projectLists[0]._id : undefined;
 
   if (isLoading) {
     return (
@@ -103,27 +105,31 @@ export const ProjectDetailPage: React.FC = () => {
           <div className="flex items-center gap-3">
             <div
               className="w-10 h-10 rounded-lg flex items-center justify-center"
-              style={{ backgroundColor: project.color }}
+              style={{ backgroundColor: project?.color || "#6366F1" }}
             >
               <FontAwesomeIcon icon={faFolderOpen} className="w-5 h-5 text-white" />
             </div>
             <div>
-              <h1 className="text-3xl font-bold">{project.name}</h1>
-              {project.description && (
+              <h1 className="text-3xl font-bold">{project?.name || "Project"}</h1>
+              {project?.description && (
                 <p className="text-muted-foreground mt-1">{project.description}</p>
               )}
             </div>
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => openModal("task", { projectId: id })}>
-            <FontAwesomeIcon icon={faPlus} className="mr-2 h-4 w-4" />
-            Add Task
-          </Button>
-          <Button variant="outline" onClick={() => openModal("list", { projectId: id })}>
-            <FontAwesomeIcon icon={faPlus} className="mr-2 h-4 w-4" />
-            Add List
-          </Button>
+          {permissions.canEdit && (
+            <Button variant="outline" onClick={() => openModal("task", { projectId: id })}>
+              <FontAwesomeIcon icon={faPlus} className="mr-2 h-4 w-4" />
+              Add Task
+            </Button>
+          )}
+          {permissions.canManageMembers && (
+            <Button variant="outline" onClick={() => openModal("list", { projectId: id })}>
+              <FontAwesomeIcon icon={faPlus} className="mr-2 h-4 w-4" />
+              Add List
+            </Button>
+          )}
         </div>
       </div>
 
@@ -193,7 +199,12 @@ export const ProjectDetailPage: React.FC = () => {
               </Button>
             </CardHeader>
             <CardContent>
-              {projectLists.length > 0 ? (
+              {listsLoading ? (
+                <div className="space-y-2">
+                  <Skeleton className="h-12 w-full" />
+                  <Skeleton className="h-12 w-full" />
+                </div>
+              ) : projectLists.length > 0 ? (
                 <div className="space-y-2">
                   {projectLists.map((list: List) => (
                     <Link key={list._id} to={`/lists/${list._id}`}>
@@ -227,42 +238,114 @@ export const ProjectDetailPage: React.FC = () => {
           </Card>
         </div>
 
-        {/* Tasks */}
+        {/* Tasks - Full Width for Advanced Views */}
         <div className="lg:col-span-2">
           <Card>
-            <CardHeader className="flex flex-row items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <FontAwesomeIcon icon={faListCheck} className="w-5 h-5" />
-                Tasks
-              </CardTitle>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => openModal("task", { projectId: id })}
-              >
-                <FontAwesomeIcon icon={faPlus} className="w-4 h-4" />
-              </Button>
+            <CardHeader>
+              <div className="flex items-center justify-between mb-4">
+                <CardTitle className="flex items-center gap-2">
+                  <FontAwesomeIcon icon={faListCheck} className="w-5 h-5" />
+                  Tasks
+                </CardTitle>
+                <ProjectViewSwitcher
+                  currentView={currentView}
+                  onViewChange={setCurrentView}
+                />
+              </div>
+              
+              {/* Filter Input */}
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1">
+                  <FontAwesomeIcon
+                    icon={faFilter}
+                    className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground"
+                  />
+                  <TaskFilterInput
+                    value={filterQuery}
+                    onChange={setFilterQuery}
+                    className="pl-10"
+                  />
+                </div>
+              </div>
             </CardHeader>
             <CardContent>
-              {pendingTasks.length > 0 ? (
-                <TaskList tasks={pendingTasks} showCompleted={false} />
-              ) : completedTasks.length > 0 ? (
-                <div>
-                  <p className="text-sm text-muted-foreground mb-4">All tasks completed!</p>
-                  <TaskList tasks={completedTasks} />
-                </div>
-              ) : (
-                <EmptyState
-                  icon={faListCheck}
-                  title="No tasks yet"
-                  description="Add tasks to this project to get started."
-                  action={{
-                    label: "Add Task",
-                    onClick: () => openModal("task", { projectId: id }),
-                  }}
-                  className="py-8"
-                />
-              )}
+              {(() => {
+                // Apply filter if query exists
+                let filteredTasks: TaskPopulated[] = tasks;
+                if (filterQuery.trim()) {
+                  const { expression, error } = parseFilterQuery(filterQuery);
+                  if (!error && expression) {
+                    filteredTasks = tasks.filter((task) => evaluateFilter(expression, task));
+                  } else if (error) {
+                    // If there's a parse error, show all tasks but error is displayed in input
+                    filteredTasks = tasks;
+                  }
+                }
+
+                if (filteredTasks.length === 0) {
+                  return (
+                    <EmptyState
+                      icon={faListCheck}
+                      title="No tasks yet"
+                      description="Add tasks to this project to get started."
+                      action={
+                        permissions.canEdit
+                          ? {
+                              label: "Add Task",
+                              onClick: () => openModal("task", { projectId: id }),
+                            }
+                          : undefined
+                      }
+                      className="py-8"
+                    />
+                  );
+                }
+
+                switch (currentView) {
+                  case "list":
+                    return (
+                      <ProjectListView
+                        projectId={id || ""}
+                        tasks={filteredTasks}
+                        defaultListId={defaultListId as string | undefined}
+                      />
+                    );
+                  case "table":
+                    return (
+                      <ProjectTableView
+                        projectId={id || ""}
+                        tasks={filteredTasks}
+                      />
+                    );
+                    case "kanban":
+                      return (
+                        <div className="space-y-4">
+                          {permissions.canManageMembers && (
+                            <Card>
+                              <CardContent className="pt-6">
+                                <KanbanColumnManager projectId={id || ""} />
+                              </CardContent>
+                            </Card>
+                          )}
+                          <ProjectKanbanView
+                            projectId={id || ""}
+                            tasks={filteredTasks}
+                          />
+                        </div>
+                      );
+                  case "gantt":
+                    return (
+                      <ProjectGanttView
+                        projectId={id || ""}
+                        tasks={filteredTasks}
+                      />
+                    );
+                  default:
+                    return (
+                      <TaskList tasks={filteredTasks} showCompleted={true} />
+                    );
+                }
+              })()}
             </CardContent>
           </Card>
         </div>

@@ -51,9 +51,9 @@ export const ConfirmDialog: React.FC<ConfirmDialogProps> = ({
       <DialogContent className="max-w-md">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
-          {description && (
-            <DialogDescription>{description}</DialogDescription>
-          )}
+          <DialogDescription>
+            {description || "Please confirm this action."}
+          </DialogDescription>
         </DialogHeader>
         <DialogFooter>
           <Button

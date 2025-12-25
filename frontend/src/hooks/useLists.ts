@@ -58,12 +58,21 @@ export const useCreateList = () => {
   return useMutation({
     mutationFn: (data: CreateListRequest) => listsApi.createList(data),
     onSuccess: (newList) => {
-      // Update the lists cache
+      // Update all list queries (both with and without projectId filter)
       queryClient.setQueryData<List[]>(listKeys.lists(), (old) => {
         return old ? [newList, ...old] : [newList];
       });
-      // Invalidate to refetch with proper sorting
-      queryClient.invalidateQueries({ queryKey: listKeys.lists() });
+      
+      // If the list has a project, also update the project-specific query
+      if (newList.project) {
+        const projectId = typeof newList.project === "string" ? newList.project : newList.project._id;
+        queryClient.setQueryData<List[]>(listKeys.list({ projectId }), (old) => {
+          return old ? [newList, ...old] : [newList];
+        });
+      }
+      
+      // Invalidate all list queries to refetch with proper sorting
+      queryClient.invalidateQueries({ queryKey: listKeys.all });
       toast.success("List created", `"${newList.name}" has been created`);
     },
     onError: (error: Error) => {
@@ -84,9 +93,22 @@ export const useUpdateList = () => {
       listsApi.updateList(id, data),
     onSuccess: (updatedList) => {
       queryClient.setQueryData(listKeys.detail(updatedList._id), updatedList);
+      
+      // Update all list queries
       queryClient.setQueryData<List[]>(listKeys.lists(), (old) => {
         return old?.map((l) => (l._id === updatedList._id ? updatedList : l));
       });
+      
+      // If the list has a project, also update the project-specific query
+      if (updatedList.project) {
+        const projectId = typeof updatedList.project === "string" ? updatedList.project : updatedList.project._id;
+        queryClient.setQueryData<List[]>(listKeys.list({ projectId }), (old) => {
+          return old?.map((l) => (l._id === updatedList._id ? updatedList : l));
+        });
+      }
+      
+      // Invalidate to ensure consistency
+      queryClient.invalidateQueries({ queryKey: listKeys.all });
       toast.success("List updated", "Your changes have been saved");
     },
     onError: (error: Error) => {
@@ -104,11 +126,15 @@ export const useDeleteList = () => {
 
   return useMutation({
     mutationFn: (id: string) => listsApi.deleteList(id),
-    onSuccess: (_, id) => {
+    onSuccess: (_, deletedId) => {
+      // Remove from all list queries
       queryClient.setQueryData<List[]>(listKeys.lists(), (old) => {
-        return old?.filter((l) => l._id !== id);
+        return old?.filter((l) => l._id !== deletedId);
       });
-      queryClient.removeQueries({ queryKey: listKeys.detail(id) });
+      
+      // Invalidate all list queries to ensure project-specific queries are updated
+      queryClient.invalidateQueries({ queryKey: listKeys.all });
+      queryClient.removeQueries({ queryKey: listKeys.detail(deletedId) });
       toast.success("List deleted", "The list has been removed");
     },
     onError: (error: Error) => {

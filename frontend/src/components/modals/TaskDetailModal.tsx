@@ -28,6 +28,7 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -156,8 +157,10 @@ export const TaskDetailModal: React.FC = () => {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Task not found</DialogTitle>
+            <DialogDescription>
+              The task you're looking for doesn't exist.
+            </DialogDescription>
           </DialogHeader>
-          <p className="text-muted-foreground">The task you're looking for doesn't exist.</p>
           <Button onClick={closeModal}>Close</Button>
         </DialogContent>
       </Dialog>
@@ -174,6 +177,9 @@ export const TaskDetailModal: React.FC = () => {
             <FontAwesomeIcon icon={faList} className="w-5 h-5" />
             Task Details
           </DialogTitle>
+          <DialogDescription>
+            View and edit task information
+          </DialogDescription>
         </DialogHeader>
 
         {isLoading ? (
@@ -204,7 +210,7 @@ export const TaskDetailModal: React.FC = () => {
                 name="priority"
                 control={control}
                 render={({ field }) => (
-                  <Select value={field.value} onValueChange={field.onChange}>
+                  <Select value={field.value || "medium"} onValueChange={field.onChange}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>

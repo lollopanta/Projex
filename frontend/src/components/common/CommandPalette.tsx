@@ -21,6 +21,7 @@ import {
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
 } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { useUIStore } from "@/store";
@@ -234,7 +235,14 @@ export const CommandPalette: React.FC = () => {
 
   return (
     <Dialog open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen}>
-      <DialogContent className="max-w-2xl p-0 gap-0 overflow-hidden" showClose={false}>
+      <DialogContent 
+        className="max-w-2xl p-0 gap-0 overflow-hidden" 
+        showClose={false}
+        aria-describedby="command-palette-description"
+      >
+        <DialogDescription id="command-palette-description" className="sr-only">
+          Search and navigate through projects, tasks, lists, and labels
+        </DialogDescription>
         {/* Search Input */}
         <div className="flex items-center border-b px-4">
           <FontAwesomeIcon icon={faSearch} className="h-4 w-4 text-muted-foreground" />

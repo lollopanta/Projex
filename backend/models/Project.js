@@ -34,6 +34,29 @@ const projectSchema = new mongoose.Schema({
     type: String,
     default: '#6366F1'
   },
+  kanbanColumns: [{
+    _id: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: () => new mongoose.Types.ObjectId()
+    },
+    name: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    color: {
+      type: String,
+      default: '#6366F1'
+    },
+    position: {
+      type: Number,
+      required: true
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    }
+  }],
   isArchived: {
     type: Boolean,
     default: false

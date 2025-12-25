@@ -168,10 +168,67 @@ router.post('/', authenticate, [
     }
 
     // Verify project if provided
-    if (project) {
-      const projectDoc = await Project.findById(project);
+    const projectId = project || listDoc.project;
+    let projectDoc = null;
+    if (projectId) {
+      projectDoc = await Project.findById(projectId);
       if (!projectDoc) {
         return res.status(404).json({ message: 'Project not found' });
+      }
+    }
+
+    // Validate assignees if provided
+    if (assignedTo && Array.isArray(assignedTo) && assignedTo.length > 0) {
+      // Check if user has permission to assign tasks
+      let canAssign = false;
+      if (projectDoc) {
+        const isOwner = projectDoc.owner.toString() === req.user._id.toString();
+        const member = projectDoc.members.find(m => m.user.toString() === req.user._id.toString());
+        canAssign = isOwner || (member && ['admin', 'editor'].includes(member.role));
+      } else {
+        // If no project, check list permissions
+        const isListOwner = listDoc.owner.toString() === req.user._id.toString();
+        const listMember = listDoc.members.find(m => m.user.toString() === req.user._id.toString());
+        canAssign = isListOwner || (listMember && ['admin', 'editor'].includes(listMember.role));
+      }
+
+      if (!canAssign) {
+        return res.status(403).json({ message: 'You do not have permission to assign tasks' });
+      }
+
+      // Validate each assignee is a project/list member
+      const User = require('../models/User');
+      for (const userId of assignedTo) {
+        // Check if user exists
+        const user = await User.findById(userId);
+        if (!user) {
+          return res.status(400).json({ message: `User ${userId} not found` });
+        }
+
+        // Check if user is a project member (if project exists)
+        if (projectDoc) {
+          const isProjectOwner = projectDoc.owner.toString() === userId;
+          const isProjectMember = projectDoc.members.some(m => m.user.toString() === userId);
+          if (!isProjectOwner && !isProjectMember) {
+            return res.status(400).json({ message: `User ${userId} is not a member of this project` });
+          }
+
+          // Check if list has restricted members
+          if (listDoc.members && listDoc.members.length > 0) {
+            const isListOwner = listDoc.owner.toString() === userId;
+            const isListMember = listDoc.members.some(m => m.user.toString() === userId);
+            if (!isListOwner && !isListMember) {
+              return res.status(400).json({ message: `User ${userId} is not allowed in this list` });
+            }
+          }
+        } else {
+          // If no project, check list membership
+          const isListOwner = listDoc.owner.toString() === userId;
+          const isListMember = listDoc.members.some(m => m.user.toString() === userId);
+          if (!isListOwner && !isListMember) {
+            return res.status(400).json({ message: `User ${userId} is not a member of this list` });
+          }
+        }
       }
     }
 
@@ -179,7 +236,7 @@ router.post('/', authenticate, [
       title,
       description,
       list,
-      project: project || listDoc.project || null,
+      project: projectId || null,
       createdBy: req.user._id,
       assignedTo: assignedTo || [],
       priority: priority || 'medium',
@@ -212,12 +269,68 @@ router.post('/', authenticate, [
 // @access  Private
 router.put('/:id', authenticate, checkListAccess, canEdit, async (req, res) => {
   try {
-    const task = await Task.findById(req.params.id);
+    const task = await Task.findById(req.params.id).populate('list').populate('project');
     if (!task) {
       return res.status(404).json({ message: 'Task not found' });
     }
 
     const updates = req.body;
+
+    // Validate assignees if being updated
+    if (updates.assignedTo !== undefined && Array.isArray(updates.assignedTo)) {
+      const listDoc = task.list;
+      const projectDoc = task.project;
+
+      // Check if user has permission to assign tasks
+      let canAssign = false;
+      if (projectDoc) {
+        const isOwner = projectDoc.owner.toString() === req.user._id.toString();
+        const member = projectDoc.members.find(m => m.user.toString() === req.user._id.toString());
+        canAssign = isOwner || (member && ['admin', 'editor'].includes(member.role));
+      } else if (listDoc) {
+        const isListOwner = listDoc.owner.toString() === req.user._id.toString();
+        const listMember = listDoc.members.find(m => m.user.toString() === req.user._id.toString());
+        canAssign = isListOwner || (listMember && ['admin', 'editor'].includes(listMember.role));
+      }
+
+      if (!canAssign && updates.assignedTo.length > 0) {
+        return res.status(403).json({ message: 'You do not have permission to assign tasks' });
+      }
+
+      // Validate each assignee
+      if (updates.assignedTo.length > 0) {
+        const User = require('../models/User');
+        for (const userId of updates.assignedTo) {
+          const user = await User.findById(userId);
+          if (!user) {
+            return res.status(400).json({ message: `User ${userId} not found` });
+          }
+
+          if (projectDoc) {
+            const isProjectOwner = projectDoc.owner.toString() === userId;
+            const isProjectMember = projectDoc.members.some(m => m.user.toString() === userId);
+            if (!isProjectOwner && !isProjectMember) {
+              return res.status(400).json({ message: `User ${userId} is not a member of this project` });
+            }
+
+            if (listDoc.members && listDoc.members.length > 0) {
+              const isListOwner = listDoc.owner.toString() === userId;
+              const isListMember = listDoc.members.some(m => m.user.toString() === userId);
+              if (!isListOwner && !isListMember) {
+                return res.status(400).json({ message: `User ${userId} is not allowed in this list` });
+              }
+            }
+          } else if (listDoc) {
+            const isListOwner = listDoc.owner.toString() === userId;
+            const isListMember = listDoc.members.some(m => m.user.toString() === userId);
+            if (!isListOwner && !isListMember) {
+              return res.status(400).json({ message: `User ${userId} is not a member of this list` });
+            }
+          }
+        }
+      }
+    }
+
     Object.keys(updates).forEach(key => {
       if (key !== '_id' && key !== 'createdAt' && key !== 'updatedAt') {
         task[key] = updates[key];

@@ -32,14 +32,22 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useSiteSettings, useUpdateSiteSettings, useAdminStats } from "@/hooks";
-import { useToast } from "@/store";
+import { useAuthStore, useToast } from "@/store";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import type { SiteSettings } from "@/types";
 
 export const AdminSettingsPanel: React.FC = () => {
+  const { user } = useAuthStore();
   const { toast } = useToast();
-  const { data: settings, isLoading: settingsLoading } = useSiteSettings();
-  const { data: stats, isLoading: statsLoading } = useAdminStats();
+  const isAdmin = user?.role === "admin";
+  
+  const { data: settings, isLoading: settingsLoading, error: settingsError } = useSiteSettings({
+    enabled: isAdmin,
+  });
+  const { data: stats, isLoading: statsLoading } = useAdminStats({
+    enabled: isAdmin,
+  });
   const updateSettings = useUpdateSiteSettings();
 
   const [localSettings, setLocalSettings] = useState(settings);
@@ -51,15 +59,15 @@ export const AdminSettingsPanel: React.FC = () => {
     }
   }, [settings]);
 
-  const handleToggle = (field: keyof typeof settings) => {
+  const handleToggle = (field: keyof SiteSettings) => {
     if (!localSettings) return;
     setLocalSettings({
       ...localSettings,
-      [field]: !localSettings[field],
+      [field]: !(localSettings[field] as boolean),
     });
   };
 
-  const handleChange = (field: keyof typeof settings, value: unknown) => {
+  const handleChange = (field: keyof SiteSettings, value: unknown) => {
     if (!localSettings) return;
     setLocalSettings({
       ...localSettings,
@@ -68,11 +76,34 @@ export const AdminSettingsPanel: React.FC = () => {
   };
 
   const handleSave = () => {
-    if (!localSettings) return;
-    updateSettings.mutate(localSettings);
+    if (!localSettings || !settings) return;
+    // Only send changed fields
+    const changes: Partial<SiteSettings> = {};
+    Object.keys(localSettings).forEach((key) => {
+      const k = key as keyof SiteSettings;
+      if (localSettings[k] !== settings[k]) {
+        changes[k] = localSettings[k];
+      }
+    });
+    updateSettings.mutate(changes);
   };
 
-  const hasChanges = JSON.stringify(localSettings) !== JSON.stringify(settings);
+  const hasChanges = localSettings && settings 
+    ? JSON.stringify(localSettings) !== JSON.stringify(settings)
+    : false;
+
+  // Don't show anything if not admin
+  if (!isAdmin) {
+    return (
+      <Card>
+        <CardContent className="pt-6">
+          <p className="text-muted-foreground text-center">
+            You don't have permission to access admin settings.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (settingsLoading) {
     return (
@@ -84,11 +115,15 @@ export const AdminSettingsPanel: React.FC = () => {
     );
   }
 
-  if (!settings) {
+  if (settingsError || !settings) {
+    const errorMessage = (settingsError as Error & { status?: number })?.status === 403
+      ? "You don't have permission to access admin settings."
+      : "Failed to load settings. Please try again later.";
+    
     return (
       <Card>
         <CardContent className="pt-6">
-          <p className="text-muted-foreground">Failed to load settings</p>
+          <p className="text-muted-foreground text-center">{errorMessage}</p>
         </CardContent>
       </Card>
     );
@@ -220,11 +255,11 @@ export const AdminSettingsPanel: React.FC = () => {
           <div className="space-y-2">
             <Label>Default Theme</Label>
             <Select
-              value={localSettings.defaultTheme}
+              value={localSettings.defaultTheme || "light"}
               onValueChange={(value) => handleChange("defaultTheme", value)}
             >
               <SelectTrigger>
-                <SelectValue />
+                <SelectValue placeholder="Select theme" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="light">Light</SelectItem>

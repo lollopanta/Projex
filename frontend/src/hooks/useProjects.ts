@@ -6,13 +6,16 @@
  */
 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { projectsApi } from "@/api";
+import { projectsApi } from "@/api/projects";
 import { useToast } from "@/store";
 import type {
   CreateProjectRequest,
   UpdateProjectRequest,
   AddProjectMemberRequest,
   Project,
+  KanbanColumn,
+  CreateKanbanColumnRequest,
+  UpdateKanbanColumnRequest,
 } from "@/types";
 
 // Query keys
@@ -140,6 +143,34 @@ export const useAddProjectMember = () => {
 };
 
 /**
+ * Hook to update a member's role in a project
+ */
+export const useUpdateProjectMemberRole = () => {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: ({
+      projectId,
+      memberId,
+      role,
+    }: {
+      projectId: string;
+      memberId: string;
+      role: "viewer" | "editor" | "admin";
+    }) => projectsApi.updateProjectMemberRole(projectId, memberId, role),
+    onSuccess: (updatedProject) => {
+      queryClient.setQueryData(projectKeys.detail(updatedProject._id), updatedProject);
+      queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
+      toast.success("Member role updated", "The member's role has been changed");
+    },
+    onError: (error: Error) => {
+      toast.error("Failed to update member role", error.message);
+    },
+  });
+};
+
+/**
  * Hook to remove a member from a project
  */
 export const useRemoveProjectMember = () => {
@@ -152,10 +183,118 @@ export const useRemoveProjectMember = () => {
     onSuccess: (updatedProject) => {
       queryClient.setQueryData(projectKeys.detail(updatedProject._id), updatedProject);
       queryClient.invalidateQueries({ queryKey: projectKeys.lists() });
+      // Also invalidate tasks to reflect unassignment
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
       toast.success("Member removed", "The user has been removed from the project");
     },
     onError: (error: Error) => {
       toast.error("Failed to remove member", error.message);
+    },
+  });
+};
+
+// ============================================
+// KANBAN COLUMNS HOOKS
+// ============================================
+
+// Query keys for Kanban columns
+export const kanbanColumnKeys = {
+  all: ["kanbanColumns"] as const,
+  project: (projectId: string) => [...kanbanColumnKeys.all, "project", projectId] as const,
+};
+
+/**
+ * Hook to get all Kanban columns for a project
+ */
+export const useKanbanColumns = (projectId: string) => {
+  return useQuery({
+    queryKey: kanbanColumnKeys.project(projectId),
+    queryFn: () => projectsApi.getKanbanColumns(projectId),
+    enabled: !!projectId,
+    staleTime: 1000 * 60 * 2, // 2 minutes
+  });
+};
+
+/**
+ * Hook to create a Kanban column
+ */
+export const useCreateKanbanColumn = () => {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: ({ projectId, data }: { projectId: string; data: CreateKanbanColumnRequest }) =>
+      projectsApi.createKanbanColumn(projectId, data),
+    onSuccess: (newColumn, variables) => {
+      // Update the columns cache
+      queryClient.setQueryData<KanbanColumn[]>(kanbanColumnKeys.project(variables.projectId), (old) => {
+        const updated = old ? [...old, newColumn] : [newColumn];
+        return updated.sort((a, b) => a.position - b.position);
+      });
+      // Invalidate project to refresh kanbanColumns
+      queryClient.invalidateQueries({ queryKey: projectKeys.detail(variables.projectId) });
+      toast.success("Column created", `"${newColumn.name}" has been added`);
+    },
+    onError: (error: Error) => {
+      toast.error("Failed to create column", error.message);
+    },
+  });
+};
+
+/**
+ * Hook to update a Kanban column
+ */
+export const useUpdateKanbanColumn = () => {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: ({
+      projectId,
+      columnId,
+      data,
+    }: {
+      projectId: string;
+      columnId: string;
+      data: UpdateKanbanColumnRequest;
+    }) => projectsApi.updateKanbanColumn(projectId, columnId, data),
+    onSuccess: (updatedColumn, variables) => {
+      // Update the columns cache
+      queryClient.setQueryData<KanbanColumn[]>(kanbanColumnKeys.project(variables.projectId), (old) => {
+        return old?.map((col) => (col._id === updatedColumn._id ? updatedColumn : col));
+      });
+      // Invalidate project
+      queryClient.invalidateQueries({ queryKey: projectKeys.detail(variables.projectId) });
+      toast.success("Column updated", "Your changes have been saved");
+    },
+    onError: (error: Error) => {
+      toast.error("Failed to update column", error.message);
+    },
+  });
+};
+
+/**
+ * Hook to delete a Kanban column
+ */
+export const useDeleteKanbanColumn = () => {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  return useMutation({
+    mutationFn: ({ projectId, columnId }: { projectId: string; columnId: string }) =>
+      projectsApi.deleteKanbanColumn(projectId, columnId),
+    onSuccess: (_, variables) => {
+      // Remove from columns cache
+      queryClient.setQueryData<KanbanColumn[]>(kanbanColumnKeys.project(variables.projectId), (old) => {
+        return old?.filter((col) => col._id !== variables.columnId);
+      });
+      // Invalidate project and tasks
+      queryClient.invalidateQueries({ queryKey: projectKeys.detail(variables.projectId) });
+      queryClient.invalidateQueries({ queryKey: ["tasks"] });
+      toast.success("Column deleted", "The column has been removed");
+    },
+    onError: (error: Error) => {
+      toast.error("Failed to delete column", error.message);
     },
   });
 };

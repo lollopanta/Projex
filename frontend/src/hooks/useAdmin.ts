@@ -20,11 +20,19 @@ export const adminKeys = {
 /**
  * Hook to get site settings (admin only)
  */
-export const useSiteSettings = () => {
+export const useSiteSettings = (options?: { enabled?: boolean }) => {
   return useQuery({
     queryKey: adminKeys.settings(),
     queryFn: () => adminApi.getSiteSettings(),
+    enabled: options?.enabled !== false, // Default to true, but can be disabled
     staleTime: 1000 * 60 * 5, // 5 minutes
+    retry: (failureCount, error) => {
+      // Don't retry on 403 (Forbidden) - user is not admin
+      if ((error as Error & { status?: number })?.status === 403) {
+        return false;
+      }
+      return failureCount < 2;
+    },
   });
 };
 
@@ -71,10 +79,18 @@ export const useUpdateSiteSettings = () => {
 /**
  * Hook to get admin statistics (admin only)
  */
-export const useAdminStats = () => {
+export const useAdminStats = (options?: { enabled?: boolean }) => {
   return useQuery({
     queryKey: adminKeys.stats(),
     queryFn: () => adminApi.getAdminStats(),
+    enabled: options?.enabled !== false, // Default to true, but can be disabled
     staleTime: 1000 * 60, // 1 minute
+    retry: (failureCount, error) => {
+      // Don't retry on 403 (Forbidden) - user is not admin
+      if ((error as Error & { status?: number })?.status === 403) {
+        return false;
+      }
+      return failureCount < 2;
+    },
   });
 };

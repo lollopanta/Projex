@@ -251,7 +251,7 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
               name="list"
               control={control}
               render={({ field }) => (
-                <Select value={field.value} onValueChange={field.onChange}>
+                <Select value={field.value || ""} onValueChange={field.onChange}>
                   <SelectTrigger id="task-list" className={cn(errors.list && "border-destructive")}>
                     <SelectValue placeholder="Select a list">
                       {lists?.find((l) => l._id === field.value)?.name || "Select a list"}
@@ -291,11 +291,9 @@ export const CreateTaskModal: React.FC<CreateTaskModalProps> = ({
               name="project"
               control={control}
               render={({ field }) => {
-                // Convert empty string to undefined for Select (shows placeholder)
                 // Use special value "__none__" for "No project" option
-                const selectValue = field.value 
-                  ? (field.value === "__none__" ? "__none__" : field.value)
-                  : undefined;
+                // Always provide a value to keep Select controlled
+                const selectValue = field.value || "__none__";
                 
                 return (
                   <Select 

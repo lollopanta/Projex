@@ -185,7 +185,7 @@ export const CreateListModal: React.FC = () => {
           <div className="space-y-2">
             <Label htmlFor="list-project">Project (optional)</Label>
             <Select
-              value={watch("project") || undefined}
+              value={watch("project") || "__none__"}
               onValueChange={(value) => setValue("project", value === "__none__" ? "" : value)}
             >
               <SelectTrigger id="list-project">
