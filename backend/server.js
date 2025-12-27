@@ -18,6 +18,7 @@ const commentRoutes = require('./routes/comments');
 const backupRoutes = require('./routes/backup');
 const googleCalendarRoutes = require('./routes/googleCalendar');
 const adminRoutes = require('./routes/admin');
+const smartEngineRoutes = require('./routes/smartEngine');
 
 // Import reminder service
 const reminderService = require('./services/reminderService');
@@ -66,6 +67,7 @@ app.use('/api/comments', commentRoutes);
 app.use('/api/backup', backupRoutes);
 app.use('/api/google-calendar', googleCalendarRoutes);
 app.use('/api/admin', adminRoutes);
+app.use('/api/internal/smart-engine', smartEngineRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

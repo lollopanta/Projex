@@ -7,11 +7,13 @@
 
 import React from "react";
 import { useParams, Link } from "react-router";
+import type { List } from "@/types";
 import { FontAwesomeIcon } from "@fortawesome/react-fontawesome";
 import {
   faListCheck,
   faPlus,
   faChevronLeft,
+  faBrain,
 } from "@fortawesome/free-solid-svg-icons";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -105,10 +107,26 @@ export const ListDetailPage: React.FC = () => {
             </div>
           </div>
         </div>
-        <Button onClick={() => openModal("task", { listId: id })}>
-          <FontAwesomeIcon icon={faPlus} className="mr-2 h-4 w-4" />
-          Add Task
-        </Button>
+        <div className="flex items-center gap-2">
+          {list.project && (
+            <Link
+              to={`/projects/${
+                typeof list.project === "object" && list.project !== null
+                  ? list.project._id
+                  : list.project
+              }/smart-engine`}
+            >
+              <Button variant="outline" title="Smart Engine">
+                <FontAwesomeIcon icon={faBrain} className="mr-2 h-4 w-4" />
+                Smart Engine
+              </Button>
+            </Link>
+          )}
+          <Button onClick={() => openModal("task", { listId: id })}>
+            <FontAwesomeIcon icon={faPlus} className="mr-2 h-4 w-4" />
+            Add Task
+          </Button>
+        </div>
       </div>
 
       {/* Stats */}

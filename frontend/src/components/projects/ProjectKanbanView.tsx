@@ -23,8 +23,8 @@ import { cn } from "@/lib/utils";
 import { useProjectPermissions } from "@/hooks/useProjectPermissions";
 import { useUpdateTask } from "@/hooks/useTasks";
 import { useKanbanColumns } from "@/hooks/useProjects";
-import { useUIStore } from "@/store";
-import type { TaskPopulated, KanbanColumn as KanbanColumnType } from "@/types";
+import { useUIStore, useToast } from "@/store";
+import type { TaskPopulated, KanbanColumn as KanbanColumnType, TaskDependency } from "@/types";
 
 interface KanbanColumnWithTasks extends KanbanColumnType {
   taskIds: string[];
@@ -40,6 +40,7 @@ export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
   tasks,
 }) => {
   const { openModal } = useUIStore();
+  const { toast } = useToast();
   const permissions = useProjectPermissions(projectId);
   const updateTask = useUpdateTask();
   const { data: projectColumns = [], isLoading: columnsLoading } = useKanbanColumns(projectId);
@@ -47,6 +48,35 @@ export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
   const [columns, setColumns] = useState<KanbanColumnWithTasks[]>([]);
   const [activeId, setActiveId] = useState<string | null>(null);
   const [isUpdatingTask, setIsUpdatingTask] = useState(false);
+
+  // Helper function to check if all dependencies are completed
+  const areAllDependenciesCompleted = (task: TaskPopulated): boolean => {
+    if (!task.dependencies || task.dependencies.length === 0) {
+      return true; // No dependencies, so it's "complete" in terms of dependencies
+    }
+
+    // Check each dependency
+    for (const dep of task.dependencies) {
+      // Handle both populated (TaskDependency) and unpopulated (ObjectId) cases
+      // TaskDependency has a 'completed' property, ObjectId does not
+      if (typeof dep === 'object' && 'completed' in dep) {
+        // It's a TaskDependency object
+        const dependency = dep as TaskDependency;
+        if (!dependency.completed) {
+          return false; // Found an incomplete dependency
+        }
+      } else {
+        // It's an ObjectId (string or ObjectId object) - we need to find the task in the tasks array
+        const depId = typeof dep === 'string' ? dep : (dep as any).toString();
+        const dependencyTask = tasks.find((t) => t._id === depId);
+        if (!dependencyTask || !dependencyTask.completed) {
+          return false; // Dependency not found or not completed
+        }
+      }
+    }
+
+    return true; // All dependencies are completed
+  };
 
   // Debug: Log permissions and columns
   React.useEffect(() => {
@@ -64,13 +94,19 @@ export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
     // Don't update columns if we're in the middle of updating a task (drag operation)
     if (isUpdatingTask) return;
 
-    // Only reinitialize if columns structure changed (new columns added/removed), not on task updates
-    const currentColumnIds = columns.map(c => c._id).sort().join(',');
+    // Reinitialize if columns structure changed (new columns added/removed) OR order changed
+    const currentColumnIds = columns.map(c => c._id).join(',');
     const newColumnIds = projectColumns.length > 0 
-      ? projectColumns.map(c => c._id).sort().join(',')
+      ? projectColumns.map(c => c._id).join(',') // Keep order, don't sort
       : 'todo,in-progress,done';
 
-    if (currentColumnIds !== newColumnIds || columns.length === 0) {
+    // Check if column IDs changed (added/removed) or order changed
+    const columnIdsChanged = currentColumnIds !== newColumnIds;
+    const columnOrderChanged = projectColumns.length > 0 && columns.length > 0 &&
+      columns.length === projectColumns.length &&
+      columns.some((col, index) => col._id !== projectColumns[index]?._id);
+
+    if (columnIdsChanged || columnOrderChanged || columns.length === 0) {
       // Column structure changed or first load, reinitialize
       if (projectColumns.length > 0) {
         // Use project columns - assign tasks based on kanbanColumnId
@@ -287,10 +323,25 @@ export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
         if (matchingProjectColumn) {
           // Found matching project column - use its ObjectId
           console.log('Using project column ObjectId:', matchingProjectColumn._id, 'for column:', targetColumn.name);
-          // If moving to Done column, mark as completed
+          // If moving to Done column, check dependencies first
           const isDoneColumn = matchingProjectColumn.name.toLowerCase() === 'done';
           // If moving from Done to another column, uncomplete
           const isMovingFromDone = sourceColumn.name.toLowerCase() === 'done';
+          
+          // Check if moving to Done and if all dependencies are completed
+          if (isDoneColumn) {
+            const task = tasks.find((t) => t._id === taskId);
+            if (task && !areAllDependenciesCompleted(task)) {
+              // Reset columns to original state
+              setColumns(columns);
+              toast.error(
+                "Cannot complete task",
+                "All dependencies must be completed before moving this task to Done"
+              );
+              return;
+            }
+          }
+          
           updateData = { 
             kanbanColumnId: matchingProjectColumn._id,
             ...(isDoneColumn ? { completed: true } : isMovingFromDone ? { completed: false } : {})
@@ -305,6 +356,17 @@ export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
           } else {
             // Invalid ObjectId, treat as default column
             if (targetColumn._id === "done") {
+              // Check dependencies before allowing move to Done
+              const task = tasks.find((t) => t._id === taskId);
+              if (task && !areAllDependenciesCompleted(task)) {
+                // Reset columns to original state
+                setColumns(columns);
+                toast.error(
+                  "Cannot complete task",
+                  "All dependencies must be completed before moving this task to Done"
+                );
+                return;
+              }
               updateData = { completed: true, kanbanColumnId: null };
             } else if (targetColumn._id === "todo") {
               updateData = { completed: false, kanbanColumnId: null };
@@ -322,6 +384,17 @@ export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
         // No project columns - using default columns
         const isMovingFromDone = sourceColumn._id === "done";
         if (targetColumn._id === "done") {
+          // Check dependencies before allowing move to Done
+          const task = tasks.find((t) => t._id === taskId);
+          if (task && !areAllDependenciesCompleted(task)) {
+            // Reset columns to original state
+            setColumns(columns);
+            toast.error(
+              "Cannot complete task",
+              "All dependencies must be completed before moving this task to Done"
+            );
+            return;
+          }
           updateData = { completed: true, kanbanColumnId: null };
         } else if (targetColumn._id === "todo") {
           updateData = { completed: false, kanbanColumnId: null };
@@ -436,10 +509,25 @@ export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
           }
           
           if (matchingProjectColumn) {
-            // If moving to Done column, mark as completed
+            // If moving to Done column, check dependencies first
             const isDoneColumn = matchingProjectColumn.name.toLowerCase() === 'done';
             // If moving from Done to another column, uncomplete
             const isMovingFromDone = sourceColumn.name.toLowerCase() === 'done';
+            
+            // Check if moving to Done and if all dependencies are completed
+            if (isDoneColumn) {
+              const task = tasks.find((t) => t._id === taskId);
+              if (task && !areAllDependenciesCompleted(task)) {
+                // Reset columns to original state
+                setColumns(columns);
+                toast.error(
+                  "Cannot complete task",
+                  "All dependencies must be completed before moving this task to Done"
+                );
+                return;
+              }
+            }
+            
             updateData = { 
               kanbanColumnId: matchingProjectColumn._id,
               ...(isDoneColumn ? { completed: true } : isMovingFromDone ? { completed: false } : {})
@@ -457,6 +545,17 @@ export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
             } else {
               // Invalid ObjectId, treat as default column
               if (overTaskColumn._id === "done") {
+                // Check dependencies before allowing move to Done
+                const task = tasks.find((t) => t._id === taskId);
+                if (task && !areAllDependenciesCompleted(task)) {
+                  // Reset columns to original state
+                  setColumns(columns);
+                  toast.error(
+                    "Cannot complete task",
+                    "All dependencies must be completed before moving this task to Done"
+                  );
+                  return;
+                }
                 updateData = { completed: true, kanbanColumnId: null };
               } else if (overTaskColumn._id === "todo") {
                 updateData = { completed: false, kanbanColumnId: null };
@@ -474,6 +573,17 @@ export const ProjectKanbanView: React.FC<ProjectKanbanViewProps> = ({
           // No project columns - using default columns
           const isMovingFromDone = sourceColumn._id === "done";
           if (overTaskColumn._id === "done") {
+            // Check dependencies before allowing move to Done
+            const task = tasks.find((t) => t._id === taskId);
+            if (task && !areAllDependenciesCompleted(task)) {
+              // Reset columns to original state
+              setColumns(columns);
+              toast.error(
+                "Cannot complete task",
+                "All dependencies must be completed before moving this task to Done"
+              );
+              return;
+            }
             updateData = { completed: true, kanbanColumnId: null };
           } else if (overTaskColumn._id === "todo") {
             updateData = { completed: false, kanbanColumnId: null };

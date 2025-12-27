@@ -305,8 +305,38 @@ export const useReorderKanbanColumns = () => {
   return useMutation({
     mutationFn: ({ projectId, columnIds }: { projectId: string; columnIds: string[] }) =>
       projectsApi.reorderKanbanColumns(projectId, columnIds),
+    onMutate: async ({ projectId, columnIds }) => {
+      // Cancel any outgoing refetches to avoid overwriting optimistic update
+      await queryClient.cancelQueries({ queryKey: kanbanColumnKeys.project(projectId) });
+
+      // Snapshot the previous value for rollback
+      const previousColumns = queryClient.getQueryData<KanbanColumn[]>(
+        kanbanColumnKeys.project(projectId)
+      );
+
+      // Optimistically update the cache with new order
+      if (previousColumns) {
+        // Create a map for quick lookup
+        const columnMap = new Map(previousColumns.map((col) => [col._id, col]));
+        
+        // Reorder columns based on columnIds array
+        const reorderedColumns = columnIds
+          .map((id) => columnMap.get(id))
+          .filter((col): col is KanbanColumn => col !== undefined)
+          .map((col, index) => ({ ...col, position: index }));
+
+        // Update cache immediately
+        queryClient.setQueryData<KanbanColumn[]>(
+          kanbanColumnKeys.project(projectId),
+          reorderedColumns
+        );
+      }
+
+      // Return context with previous value for rollback
+      return { previousColumns };
+    },
     onSuccess: (reorderedColumns, variables) => {
-      // Update the columns cache with new order (positions are already updated from backend)
+      // Update the columns cache with server response (ensures consistency)
       queryClient.setQueryData<KanbanColumn[]>(
         kanbanColumnKeys.project(variables.projectId),
         reorderedColumns
@@ -315,7 +345,14 @@ export const useReorderKanbanColumns = () => {
       queryClient.invalidateQueries({ queryKey: projectKeys.detail(variables.projectId) });
       toast.success("Columns reordered", "Column order has been updated");
     },
-    onError: (error: Error) => {
+    onError: (error: Error, variables, context) => {
+      // Rollback to previous value on error
+      if (context?.previousColumns) {
+        queryClient.setQueryData<KanbanColumn[]>(
+          kanbanColumnKeys.project(variables.projectId),
+          context.previousColumns
+        );
+      }
       toast.error("Failed to reorder columns", error.message);
     },
   });

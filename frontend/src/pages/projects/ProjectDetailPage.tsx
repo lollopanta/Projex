@@ -14,6 +14,7 @@ import {
   faListCheck,
   faChevronLeft,
   faFilter,
+  faBrain,
 } from "@fortawesome/free-solid-svg-icons";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -132,6 +133,12 @@ export const ProjectDetailPage: React.FC = () => {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Link to={`/projects/${id}/smart-engine`}>
+            <Button variant="outline" title="Smart Engine">
+              <FontAwesomeIcon icon={faBrain} className="mr-2 h-4 w-4" />
+              Smart Engine
+            </Button>
+          </Link>
           {permissions.canEdit && (
             <Button variant="outline" onClick={() => openModal("task", { projectId: id })}>
               <FontAwesomeIcon icon={faPlus} className="mr-2 h-4 w-4" />

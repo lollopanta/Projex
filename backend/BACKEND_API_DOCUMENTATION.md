@@ -17,6 +17,7 @@
   - [Comments Routes](#comments-routes)
   - [Backup Routes](#backup-routes)
   - [Google Calendar Routes](#google-calendar-routes)
+  - [Smart Engine Routes](#smart-engine-routes)
 - [Error Handling](#error-handling)
 - [Role-Based Access Control](#role-based-access-control)
 
@@ -154,6 +155,10 @@ The token expires after **7 days** by default.
 | `recurringPattern.endDate` | Date | End date for recurrence |
 | `recurringPattern.nextDueDate` | Date | Next scheduled due date |
 | `parentTask` | ObjectId (Task) | Parent task for subtasks |
+| `dependencies` | Array[ObjectId] (Task) | Tasks this task depends on (task is blocked until all dependencies are completed) |
+| `estimatedTime` | Number | Estimated duration in minutes (optional, used by Smart Engine for time estimation) |
+| `actualTime` | Number | Actual time spent in minutes (optional, used by Smart Engine for historical analysis) |
+| `percentDone` | Number | Completion percentage 0-100 (optional, used by Smart Engine for priority calculation) |
 | `attachments` | Array | File attachments |
 | `attachments[].filename` | String | File name |
 | `attachments[].path` | String | File path |
@@ -1064,6 +1069,266 @@ Authorization: Bearer <token>
 
 ---
 
+### Smart Engine Routes
+
+Base: `/api/internal/smart-engine`
+
+> **Note:** These are internal API endpoints for Smart Engine functionality. All endpoints require authentication and return deterministic, explainable results based on rules and heuristics (no AI/ML).
+
+#### Calculate Priority for a Task
+```http
+POST /api/internal/smart-engine/priority
+Authorization: Bearer <token>
+```
+
+**Request Body:**
+```json
+{
+  "taskId": "ObjectId (required)",
+  "projectId": "ObjectId (optional)",
+  "assigneeIds": ["ObjectId array (optional)"],
+  "currentDate": "ISO date string (optional)"
+}
+```
+
+**Response (200):**
+```json
+{
+  "taskId": "task_id",
+  "priorityScore": 75,
+  "reasons": [
+    "due in 2 days",
+    "blocks 3 tasks",
+    "assignee available"
+  ],
+  "explanation": "High priority because: due in 2 days, blocks 3 tasks.",
+  "factors": [
+    {
+      "factor": "urgency",
+      "value": 8.5,
+      "impact": "due in 2 days"
+    },
+    {
+      "factor": "blocking",
+      "value": 3,
+      "impact": "blocks 3 tasks"
+    }
+  ]
+}
+```
+
+**Priority Score Range:** 0-100 (higher = more urgent)
+
+---
+
+#### Calculate Priorities for Multiple Tasks
+```http
+POST /api/internal/smart-engine/priorities
+Authorization: Bearer <token>
+```
+
+**Request Body:**
+```json
+{
+  "taskIds": ["ObjectId array (required)"],
+  "projectId": "ObjectId (optional)",
+  "currentDate": "ISO date string (optional)"
+}
+```
+
+**Response (200):** Array of priority results, sorted by priority score (highest first)
+
+---
+
+#### Calculate Workload for a User
+```http
+POST /api/internal/smart-engine/workload
+Authorization: Bearer <token>
+```
+
+**Request Body:**
+```json
+{
+  "userId": "ObjectId (required)"
+}
+```
+
+**Response (200):**
+```json
+{
+  "userId": "user_id",
+  "userName": "John Doe",
+  "weeklyLoad": 2400,
+  "capacity": 2400,
+  "loadPercentage": 100,
+  "status": "overload",
+  "warnings": [
+    "User is overloaded: 100% capacity used"
+  ],
+  "suggestions": [
+    "Consider reassigning some tasks or extending deadlines"
+  ],
+  "explanation": "Overloaded: 100% capacity used (2400 min / 2400 min per week).",
+  "assignedTaskCount": 15
+}
+```
+
+**Status Values:**
+- `overload` - Capacity exceeded (≥100%)
+- `warning` - Approaching capacity (≥90%)
+- `balanced` - Normal workload (30-90%)
+- `underutilized` - Low workload (≤30%)
+
+---
+
+#### Calculate Workloads for Multiple Users
+```http
+POST /api/internal/smart-engine/workloads
+Authorization: Bearer <token>
+```
+
+**Request Body:**
+```json
+{
+  "userIds": ["ObjectId array (optional)"],
+  "projectId": "ObjectId (optional)"
+}
+```
+
+**Response (200):** Array of workload results
+
+---
+
+#### Estimate Time for a Task
+```http
+POST /api/internal/smart-engine/estimate
+Authorization: Bearer <token>
+```
+
+**Request Body:**
+```json
+{
+  "taskId": "ObjectId (required)",
+  "userId": "ObjectId (optional)",
+  "projectId": "ObjectId (optional)"
+}
+```
+
+**Response (200):**
+```json
+{
+  "estimatedMinutes": 120,
+  "confidenceLevel": 0.8,
+  "basedOn": [
+    "label:backend",
+    "project:api",
+    "assignee:user_id"
+  ],
+  "explanation": "Estimated 2 hours (high confidence based on label:backend, project:api).",
+  "sampleSize": 12
+}
+```
+
+**Confidence Levels:**
+- `≥0.8` - High confidence
+- `≥0.5` - Medium confidence
+- `<0.5` - Low confidence (fallback estimate)
+
+**Estimation Method:**
+- Uses median/mean of similar completed tasks
+- Matches by: labels, project, assignee, priority
+- Falls back to historical averages if insufficient data
+
+---
+
+#### Detect Duplicate Tasks
+```http
+POST /api/internal/smart-engine/duplicates
+Authorization: Bearer <token>
+```
+
+**Request Body:**
+```json
+{
+  "taskIds": ["ObjectId array (optional)"],
+  "projectId": "ObjectId (optional)"
+}
+```
+
+> **Note:** Either `taskIds` or `projectId` must be provided.
+
+**Response (200):** Array of duplicate detection results
+```json
+[
+  {
+    "taskId": "task_id",
+    "title": "Fix login bug",
+    "hasDuplicates": true,
+    "similarTasks": [
+      {
+        "taskId": "other_task_id",
+        "title": "Fix login bug",
+        "similarity": 0.95,
+        "projectId": "project_id",
+        "done": false
+      }
+    ],
+    "explanation": "95% similar to 1 other task.",
+    "highestSimilarity": 0.95
+  }
+]
+```
+
+**Similarity Calculation:**
+- Uses Jaccard similarity on tokenized titles
+- Default threshold: 0.7 (70% similarity)
+- Normalizes titles (lowercase, removes punctuation)
+
+---
+
+#### Analyze Dependency Impact
+```http
+POST /api/internal/smart-engine/dependencies
+Authorization: Bearer <token>
+```
+
+**Request Body:**
+```json
+{
+  "taskId": "ObjectId (required)"
+}
+```
+
+**Response (200):**
+```json
+{
+  "taskId": "task_id",
+  "direct": ["task_id_1", "task_id_2"],
+  "indirect": ["task_id_3"],
+  "all": ["task_id_1", "task_id_2", "task_id_3"],
+  "totalAffected": 3,
+  "factors": [
+    {
+      "factor": "impact",
+      "value": "high",
+      "impact": "high"
+    },
+    {
+      "factor": "affectedTasks",
+      "value": 3,
+      "impact": "3 tasks"
+    }
+  ]
+}
+```
+
+**Impact Analysis:**
+- `direct` - Tasks that directly depend on this task
+- `indirect` - Tasks that depend on tasks that depend on this task (transitive)
+- `all` - Combined list of all affected tasks
+
+---
+
 ## Error Handling
 
 All errors return a consistent format:
@@ -1176,10 +1441,51 @@ Consider using:
 - Labels: `#3B82F6` (blue)
 
 ### Priority Values
-- `low`
-- `medium` (default)
-- `high`
+- `low` (maps to priority score 1)
+- `medium` (default, maps to priority score 3)
+- `high` (maps to priority score 5)
+
+### Smart Engine Configuration
+
+All Smart Engine heuristics are configurable via project settings:
+
+```json
+{
+  "smartEngine": {
+    "priority": {
+      "weights": {
+        "urgency": 3,
+        "dependencies": 5,
+        "overdue": 10,
+        "manualPriority": 4,
+        "completion": 2,
+        "workload": 3
+      },
+      "urgencyDecay": 0.1,
+      "overduePenalty": 2
+    },
+    "workload": {
+      "overloadThreshold": 1.0,
+      "underutilizedThreshold": 0.3,
+      "warningThreshold": 0.9
+    },
+    "estimation": {
+      "minSamples": 3,
+      "useMedian": true,
+      "confidenceThresholds": {
+        "high": 0.8,
+        "medium": 0.5,
+        "low": 0.0
+      }
+    },
+    "duplication": {
+      "similarityThreshold": 0.7,
+      "minTokens": 3
+    }
+  }
+}
+```
 
 ### Theme Values
-- `light` (default)
-- `dark`
+- `light` 
+- `dark` (default)

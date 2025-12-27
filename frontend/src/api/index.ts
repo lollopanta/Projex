@@ -15,5 +15,6 @@ export * as commentsApi from "./comments";
 export * as backupApi from "./backup";
 export * as googleCalendarApi from "./googleCalendar";
 export * as adminApi from "./admin";
+export * as smartEngineApi from "./smartEngine";
 
 export { default as apiClient, getToken, setToken, removeToken } from "./client";

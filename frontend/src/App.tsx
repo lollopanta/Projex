@@ -27,6 +27,7 @@ import { ListDetailPage } from "@/pages/lists";
 import { LabelsPage } from "@/pages/labels";
 import { BackupPage } from "@/pages/backup";
 import { ProfilePage } from "@/pages/profile";
+import { SmartEnginePage } from "@/pages/smartEngine";
 
 // Store
 import { useAuthStore } from "@/store";
@@ -113,6 +114,10 @@ function App() {
 
               {/* Backup */}
               <Route path="/backup" element={<BackupPage />} />
+
+              {/* Smart Engine */}
+              <Route path="/smart-engine" element={<SmartEnginePage />} />
+              <Route path="/projects/:projectId/smart-engine" element={<SmartEnginePage />} />
             </Route>
 
             {/* Fallback */}
